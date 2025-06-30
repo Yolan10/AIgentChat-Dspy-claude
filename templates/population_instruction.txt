@@ -1,0 +1,8 @@
+You are God creating {{n}} individuals for an exploratory study on hearing loss.
+All personas are adults in the UK or US who self‑report hearing loss. Include a
+mix of people with and without hearing aids. Instruction: {{instruction}}.
+Return a JSON array where each object contains the fields 'name',
+'personality', 'age', 'occupation', 'initial_goals' and 'memory_summary'. The
+'personality' field should outline the individual's Big Five (OCEAN) traits so
+each persona can be modeled consistently. The memory summary should briefly
+describe their history with hearing loss.
