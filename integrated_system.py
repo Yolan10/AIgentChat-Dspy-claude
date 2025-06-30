@@ -133,7 +133,12 @@ class IntegratedSystem:
             print(f"{'='*50}")
             
             # PHASE 1: Wizard converses WITHOUT judging
-            log = self.wizard.converse_with(pop, show_live=config.SHOW_LIVE_CONVERSATIONS)
+            try:
+                log = self.wizard.converse_with(pop, show_live=config.SHOW_LIVE_CONVERSATIONS)
+            except Exception as e:
+                print(f"Error in conversation with {pop.name}: {e}")
+                self.logger.log_event("conversation_error", agent_id=pop.agent_id, error=str(e))
+                return
             
             print(f"\nConversation with {pop.name} completed. Now judging...")
             
