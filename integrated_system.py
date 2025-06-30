@@ -86,6 +86,13 @@ class IntegratedSystem:
         token_tracker.set_run(run_no)
 
         self.logger.log_event("system_start", instruction=instruction, n=n, run_no=run_no)
+        
+        print(f"\n{'='*60}")
+        print(f"Starting Run #{run_no}")
+        print(f"Population size: {n}")
+        print(f"Wizard goal: {self.wizard.goal}")
+        print(f"{'='*60}\n")
+        
         specs = self.generator.generate(instruction, n)
         summary: List[dict] = []
 
@@ -109,11 +116,11 @@ class IntegratedSystem:
 
         schedule = _parse_schedule(n)
         schedule_index = 0
-        next_point = schedule[schedule_index] if schedule else n
+        next_point = schedule[schedule_index] if schedule else n + 1  # Fix: ensure it's beyond n if no schedule
         batch_threads: List[threading.Thread] = []
         batch_agents: List = []
 
-        def run_conversation(pop):
+        def run_conversation(pop, conv_index):
             """Run a conversation and have it independently judged."""
             if stop_event and stop_event.is_set():
                 return
@@ -121,8 +128,14 @@ class IntegratedSystem:
                 while pause_event.is_set():
                     time.sleep(0.5)
             
+            print(f"\n{'='*50}")
+            print(f"Starting conversation {conv_index}/{n} with {pop.name} ({pop.agent_id})")
+            print(f"{'='*50}")
+            
             # PHASE 1: Wizard converses WITHOUT judging
             log = self.wizard.converse_with(pop, show_live=config.SHOW_LIVE_CONVERSATIONS)
+            
+            print(f"\nConversation with {pop.name} completed. Now judging...")
             
             # PHASE 2: Independent judging
             if self.enable_multi_judge:
@@ -154,6 +167,8 @@ class IntegratedSystem:
                     score=judge_result.get("overall", 0)
                 )
             
+            print(f"Judge evaluation complete. Score: {log['judge_result'].get('overall', 0):.2f}")
+            
             # PHASE 3: Wizard receives feedback for learning
             self.wizard.add_judge_feedback(pop.agent_id, log["judge_result"])
             
@@ -177,6 +192,7 @@ class IntegratedSystem:
                 "score": log["judge_result"].get("overall"),
                 "judge_consensus": log.get("judge_consensus", True),
             }
+            
             summary.append(entry)
             self.logger.log_event(
                 "conversation_end",
@@ -188,34 +204,43 @@ class IntegratedSystem:
         # Generate population and run conversations
         for idx, spec in enumerate(specs, start=1):
             agent = self.god.spawn_population_from_spec(spec, run_no, idx)
+            
+            print(f"Created agent {idx}/{n}: {agent.name} ({agent.agent_id})")
 
             if config.PARALLEL_CONVERSATIONS:
                 if config.START_WHEN_SPAWNED:
-                    t = threading.Thread(target=run_conversation, args=(agent,))
+                    t = threading.Thread(target=run_conversation, args=(agent, idx))
                     batch_threads.append(t)
                     t.start()
                 else:
-                    batch_agents.append(agent)
+                    batch_agents.append((agent, idx))
             else:
-                run_conversation(agent)
+                run_conversation(agent, idx)
 
-            if config.PARALLEL_CONVERSATIONS and idx == next_point:
-                if not config.START_WHEN_SPAWNED:
-                    for ag in batch_agents:
-                        t = threading.Thread(target=run_conversation, args=(ag,))
-                        batch_threads.append(t)
-                        t.start()
-                    batch_agents = []
-                for t in batch_threads:
-                    t.join()
-                batch_threads = []
+            # Check if we've reached an improvement point
+            if idx == next_point:
+                if config.PARALLEL_CONVERSATIONS:
+                    # Start any queued agents
+                    if not config.START_WHEN_SPAWNED:
+                        for ag, ag_idx in batch_agents:
+                            t = threading.Thread(target=run_conversation, args=(ag, ag_idx))
+                            batch_threads.append(t)
+                            t.start()
+                        batch_agents = []
+                    # Wait for all threads to complete
+                    for t in batch_threads:
+                        t.join()
+                    batch_threads = []
+                
+                # Update to next improvement point
                 schedule_index += 1
-                next_point = schedule[schedule_index] if schedule_index < len(schedule) else n
+                next_point = schedule[schedule_index] if schedule_index < len(schedule) else n + 1
 
+        # Handle any remaining conversations
         if config.PARALLEL_CONVERSATIONS:
             if not config.START_WHEN_SPAWNED:
-                for ag in batch_agents:
-                    t = threading.Thread(target=run_conversation, args=(ag,))
+                for ag, ag_idx in batch_agents:
+                    t = threading.Thread(target=run_conversation, args=(ag, ag_idx))
                     batch_threads.append(t)
                     t.start()
             for t in batch_threads:
@@ -223,7 +248,14 @@ class IntegratedSystem:
 
         utils.save_conversation_log(summary, f"summary_{run_no}.json")
         self.logger.log_event("system_end", run_no=run_no)
-        print(f"Completed {len(summary)} conversations.")
+        
+        print(f"\n{'='*60}")
+        print(f"Run #{run_no} Complete!")
+        print(f"Total conversations: {len(summary)}")
+        print(f"Average score: {sum(e['score'] for e in summary) / len(summary) if summary else 0:.2f}")
+        print(f"Successful conversations: {sum(1 for e in summary if e['success'])}")
+        print(f"Summary saved to: logs/summary_{run_no}.json")
+        print(f"{'='*60}")
         
         # Print judge performance summary
         self._print_judge_performance()
