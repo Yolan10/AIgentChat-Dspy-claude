@@ -11,7 +11,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 # Population Settings
 # Default population size. The value must be at least as large as the
 # highest value in ``SELF_IMPROVE_AFTER`` when that setting is a sequence.
-POPULATION_SIZE = 36
+POPULATION_SIZE = 5  # Start with smaller size for testing
 POPULATION_INSTRUCTION_TEMPLATE_PATH = "templates/population_instruction.txt"
 
 # Wizard Settings
@@ -20,7 +20,7 @@ WIZARD_DEFAULT_GOAL = (
     "Uncover key insights about hearing loss experiences and generate a"
     " structured research plan"
 )
-# Base prompt describing the wizard's research role
+# Use the research wizard prompt instead of basic wizard prompt
 WIZARD_PROMPT_TEMPLATE_PATH = "templates/research_wizard_prompt.txt"
 MAX_TURNS = 20
 # Trigger the wizard's self-improvement step. Provide an ``int`` to run the
@@ -30,7 +30,7 @@ MAX_TURNS = 20
 #     SELF_IMPROVE_AFTER = [1, 10, 15]  # improve after conversations 1, 10 and 15
 #     SELF_IMPROVE_AFTER = 10           # improve after 10, 20, 30, ...
 # Trigger improvements after conversations 1, 5 and 36 by default.
-SELF_IMPROVE_AFTER = [1, 5, 36]
+SELF_IMPROVE_AFTER = [3, 5]  # Improve after 3rd and 5th conversation for testing
 SELF_IMPROVE_PROMPT_TEMPLATE_PATH = "templates/self_improve_prompt.txt"
 
 # Judge Settings - NEW SECTION
@@ -66,7 +66,7 @@ LLM_MODEL = "gpt-4.1-nano"  # Fastest, cheapest
 LLM_TEMPERATURE = 0.7
 LLM_MAX_TOKENS = 512
 LLM_TOP_P = 0.9
-OPENAI_MAX_RETRIES = 0
+OPENAI_MAX_RETRIES = 3  # Increased for better reliability
 
 # File/Logging Settings
 LOGS_DIRECTORY = "logs"
@@ -77,7 +77,7 @@ USER_DB_PATH = "users.db"
 # Set to True to print conversation turns to the terminal while running
 SHOW_LIVE_CONVERSATIONS = True
 # Run each conversation in its own thread
-PARALLEL_CONVERSATIONS = False
+PARALLEL_CONVERSATIONS = False  # Serial for easier debugging
 # If True and conversations run in parallel, start each thread as soon as the
 # population agent is spawned instead of waiting for the full population to be
 # generated.
@@ -131,4 +131,3 @@ def validate_configuration() -> None:
             f"POPULATION_SIZE ({POPULATION_SIZE}) must be at least "
             f"as large as the last entry in SELF_IMPROVE_AFTER ({last_point})"
         )
-
