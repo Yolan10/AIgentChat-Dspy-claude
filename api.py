@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import eventlet
+
+# Ensure eventlet patches standard library modules before other imports
+eventlet.monkey_patch()
+
 import json
 import os
 import secrets
