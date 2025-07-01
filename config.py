@@ -70,8 +70,8 @@ USER_DB_PATH = "users.db"
 # Runtime Options
 # Set to True to print conversation turns to the terminal while running
 SHOW_LIVE_CONVERSATIONS = True
-# Run each conversation in its own thread
-PARALLEL_CONVERSATIONS = False  # Serial for easier debugging
+# Run each conversation in its own thread - ENABLED for better performance
+PARALLEL_CONVERSATIONS = True  # Changed from False to True
 # If True and conversations run in parallel, start each thread as soon as the
 # population agent is spawned instead of waiting for the full population to be
 # generated.
