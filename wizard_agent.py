@@ -75,8 +75,18 @@ class WizardAgent:
             "timestamp": utils.get_timestamp(),
         }
         
+        # Initial greeting from population agent
+        initial_msg = f"Hello, I'm {pop_agent.name}. I've been dealing with hearing loss and I'm interested in participating in your research study."
+        log["turns"].append({"speaker": "pop", "text": initial_msg, "time": utils.get_timestamp()})
+        if show_live:
+            print(f"\n{pop_agent.name}: {initial_msg}")
+        
+        # Store initial message in agent's history
+        pop_agent.history.append(("pop", initial_msg))
+        
         # Conduct conversation
         for turn_num in range(config.MAX_TURNS):
+            # Build message history for wizard
             messages = [SystemMessage(content=self.current_prompt)]
             for t in log["turns"]:
                 if t["speaker"] == "wizard":
@@ -84,26 +94,28 @@ class WizardAgent:
                 else:
                     messages.append(HumanMessage(content=t["text"]))
 
-            # If this is the first turn, add an initial user message to start the conversation
-            if turn_num == 0:
-                initial_msg = f"Hello, I'm {pop_agent.name}. I've been dealing with hearing loss and I'm interested in participating in your research study."
-                messages.append(HumanMessage(content=initial_msg))
-                log["turns"].append({"speaker": "pop", "text": initial_msg, "time": utils.get_timestamp()})
-                if show_live:
-                    print(f"\n{pop_agent.name}: {initial_msg}")
-
+            # Wizard responds
             wizard_msg = self.llm.invoke(messages).content
             log["turns"].append({"speaker": "wizard", "text": wizard_msg, "time": utils.get_timestamp()})
             if show_live:
                 print(f"\nWizard: {wizard_msg}")
             
+            # Check if conversation should end before getting population response
+            if self._check_conversation_complete(wizard_msg, ""):
+                if show_live:
+                    print(f"\n[Conversation ended - Research plan complete]")
+                break
+            
+            # Population agent responds
             pop_reply = pop_agent.respond_to(wizard_msg)
             log["turns"].append({"speaker": "pop", "text": pop_reply, "time": utils.get_timestamp()})
             if show_live:
                 print(f"\n{pop_agent.name}: {pop_reply}")
 
-            # Check if conversation should end (e.g., if research plan is complete)
+            # Check if conversation should end after population response
             if self._check_conversation_complete(wizard_msg, pop_reply):
+                if show_live:
+                    print(f"\n[Conversation ended naturally]")
                 break
         
         # Store conversation WITHOUT judge result (deque handles max size)
@@ -187,6 +199,7 @@ class WizardAgent:
     def self_improve(self) -> None:
         """Train an improver on the conversation history WITH judge feedback."""
         if dspy is None:
+            print(f"{self.wizard_id}: DSPy not available for improvement")
             return
 
         # Only use conversations that have judge feedback
@@ -195,6 +208,8 @@ class WizardAgent:
             print(f"{self.wizard_id}: Cannot improve without judge feedback")
             return
 
+        print(f"\n[WIZARD] Starting self-improvement with {len(judged_logs)} judged conversations...")
+        
         dataset = build_dataset(judged_logs)
         improver, metrics = train_improver(dataset)
 
@@ -208,7 +223,10 @@ class WizardAgent:
         utils.save_conversation_log(
             {"prompt": self.current_prompt, "metrics": metrics}, log_path
         )
-        print(f"Wizard improved prompt saved to {log_path}")
+        print(f"[WIZARD] Improved prompt saved to {log_path}")
+        print(f"[WIZARD] Improvement method: {metrics.get('method', 'Unknown')}")
+        print(f"[WIZARD] Best score: {metrics.get('best_score', 0):.3f}")
+        
         utils.append_improvement_log(
             self.current_run_no,
             self.current_prompt,
@@ -220,4 +238,5 @@ class WizardAgent:
         self.last_improvement = self.conversation_count
         self.improved_last_conversation = True
 
+        # Clear history buffer after improvement
         self.history_buffer.clear()
