@@ -9,5 +9,20 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Display a debug message if the React app fails to mount
+      window.addEventListener('DOMContentLoaded', function () {
+        setTimeout(function () {
+          const root = document.getElementById('root');
+          if (!root || !root.hasChildNodes()) {
+            const debug = document.createElement('div');
+            debug.textContent = 'DEBUG: Frontend assets failed to load.';
+            debug.style.background = '#fee';
+            debug.style.padding = '1em';
+            document.body.appendChild(debug);
+          }
+        }, 2000);
+      });
+    </script>
   </body>
 </html>

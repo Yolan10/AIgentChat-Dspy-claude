@@ -825,12 +825,32 @@ def search_logs():
 # Serve frontend static files
 @app.route("/")
 def serve_frontend():
-    return send_from_directory("frontend/dist", "index.html")
+    """Serve the built frontend if available, otherwise fall back to the source files."""
+    dist_dir = os.path.join("frontend", "dist")
+    dist_index = os.path.join(dist_dir, "index.html")
+    if os.path.exists(dist_index):
+        return send_from_directory(dist_dir, "index.html")
+    # If the frontend hasn't been built, serve the unbundled source version
+    fallback_index = os.path.join("frontend", "index.html")
+    if os.path.exists(fallback_index):
+        return send_from_directory("frontend", "index.html")
+    # In development environments a missing index file would cause a 404.
+    # Display a simple message to aid debugging instead of failing silently.
+    return (
+        "<h1>Frontend not found.\n" "Ensure the React app is built.</h1>",
+        200,
+        {"Content-Type": "text/html"},
+    )
 
 
 @app.route("/<path:path>")
 def serve_static(path):
-    return send_from_directory("frontend/dist", path)
+    """Serve static assets from the built frontend or the source directory."""
+    dist_dir = os.path.join("frontend", "dist")
+    dist_path = os.path.join(dist_dir, path)
+    if os.path.exists(dist_path):
+        return send_from_directory(dist_dir, path)
+    return send_from_directory("frontend", path)
 
 
 # WebSocket events
