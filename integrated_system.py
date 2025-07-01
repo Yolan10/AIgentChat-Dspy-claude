@@ -28,10 +28,10 @@ class IntegratedSystem:
         if god_agent_cls is None or wizard_agent_cls is None or judge_agent_cls is None:
             from god_agent import GodAgent as _GodAgent
             from wizard_agent import WizardAgent as _WizardAgent
-            try:  # pragma: no cover - when dependencies are missing
+            try:
                 from judge_agent import EnhancedJudgeAgent as _JudgeAgent
-            except Exception:  # pragma: no cover - lightweight fallback for tests
-                class _JudgeAgent:  # type: ignore
+            except Exception:
+                class _JudgeAgent:
                     def __init__(self, *args, **kwargs) -> None:
                         pass
 
@@ -50,7 +50,6 @@ class IntegratedSystem:
         self.god = self._god_cls()
         self.wizard = self._wizard_cls(wizard_id="Wizard_001")
 
-        
         # Initialize SEPARATE judge agent(s)
         self.primary_judge = self._judge_cls(
             judge_id="Judge_001",
@@ -66,7 +65,7 @@ class IntegratedSystem:
             self.judges = [
                 self._judge_cls(
                     judge_id=f"Judge_{i:03d}",
-                    improvement_interval=30  # Slightly different intervals for diversity
+                    improvement_interval=30
                 )
                 for i in range(1, judge_count + 1)
             ]
@@ -87,13 +86,21 @@ class IntegratedSystem:
 
         self.logger.log_event("system_start", instruction=instruction, n=n, run_no=run_no)
         
-        print(f"\n{'='*60}")
+        print(f"\n{'='*80}")
         print(f"Starting Run #{run_no}")
         print(f"Population size: {n}")
         print(f"Wizard goal: {self.wizard.goal}")
-        print(f"{'='*60}\n")
+        print(f"Instruction: {instruction}")
+        print(f"{'='*80}\n")
+        
+        # PHASE 1: Generate population specs
+        print(f"{'='*60}")
+        print("PHASE 1: GENERATING POPULATION")
+        print(f"{'='*60}")
         
         specs = self.generator.generate(instruction, n)
+        print(f"Generated {len(specs)} population specifications\n")
+        
         summary: List[dict] = []
 
         def _parse_schedule(total: int) -> List[int]:
@@ -116,7 +123,7 @@ class IntegratedSystem:
 
         schedule = _parse_schedule(n)
         schedule_index = 0
-        next_point = schedule[schedule_index] if schedule else n + 1  # Fix: ensure it's beyond n if no schedule
+        next_point = schedule[schedule_index] if schedule else n + 1
         batch_threads: List[threading.Thread] = []
         batch_agents: List = []
 
@@ -128,27 +135,35 @@ class IntegratedSystem:
                 while pause_event.is_set():
                     time.sleep(0.5)
             
-            print(f"\n{'='*50}")
-            print(f"Starting conversation {conv_index}/{n} with {pop.name} ({pop.agent_id})")
-            print(f"{'='*50}")
+            print(f"\n{'='*60}")
+            print(f"CONVERSATION {conv_index}/{n}: {pop.name} ({pop.agent_id})")
+            print(f"{'='*60}")
             
-            # PHASE 1: Wizard converses WITHOUT judging
+            # PHASE 2A: Wizard converses WITHOUT judging
+            print(f"\n[WIZARD] Starting conversation with {pop.name}...")
+            print("-" * 40)
+            
             try:
                 log = self.wizard.converse_with(pop, show_live=config.SHOW_LIVE_CONVERSATIONS)
+                print("-" * 40)
+                print(f"[WIZARD] Conversation with {pop.name} completed.")
+                print(f"         Total turns: {len(log.get('turns', []))}")
             except Exception as e:
-                print(f"Error in conversation with {pop.name}: {e}")
+                print(f"[ERROR] Conversation failed with {pop.name}: {e}")
                 self.logger.log_event("conversation_error", agent_id=pop.agent_id, error=str(e))
                 return
             
-            print(f"\nConversation with {pop.name} completed. Now judging...")
+            # PHASE 2B: Independent judging
+            print(f"\n[JUDGE] Evaluating conversation with {pop.name}...")
             
-            # PHASE 2: Independent judging
             if self.enable_multi_judge:
                 # Multiple judges evaluate independently
                 judge_results = []
                 for judge in self.judges:
+                    print(f"  - {judge.judge_id} evaluating...")
                     result = judge.assess(log)
                     judge_results.append(result)
+                    print(f"    Score: {result.get('overall', 0):.2f}")
                     self.logger.log_event(
                         "individual_judge_complete",
                         judge_id=judge.judge_id,
@@ -161,10 +176,26 @@ class IntegratedSystem:
                 log["judge_result"] = aggregated_result
                 log["individual_judge_results"] = judge_results
                 log["judge_consensus"] = aggregated_result.get("judge_consensus", False)
+                
+                print(f"\n[JUDGE] Consensus evaluation complete:")
+                print(f"  - Overall Score: {aggregated_result.get('overall', 0):.2f}")
+                print(f"  - Goal Completion: {aggregated_result.get('goal_completion', 0):.2f}")
+                print(f"  - Coherence: {aggregated_result.get('coherence', 0):.2f}")
+                print(f"  - Tone: {aggregated_result.get('tone', 0):.2f}")
+                print(f"  - Success: {aggregated_result.get('success', False)}")
+                print(f"  - Judge Agreement: {aggregated_result.get('judge_consensus', False)}")
             else:
                 # Single judge evaluation
                 judge_result = self.primary_judge.assess(log)
                 log["judge_result"] = judge_result
+                
+                print(f"\n[JUDGE] Evaluation complete:")
+                print(f"  - Overall Score: {judge_result.get('overall', 0):.2f}")
+                print(f"  - Goal Completion: {judge_result.get('goal_completion', 0):.2f}")
+                print(f"  - Coherence: {judge_result.get('coherence', 0):.2f}")
+                print(f"  - Tone: {judge_result.get('tone', 0):.2f}")
+                print(f"  - Success: {judge_result.get('success', False)}")
+                
                 self.logger.log_event(
                     "judge_complete",
                     judge_id=self.primary_judge.judge_id,
@@ -172,14 +203,14 @@ class IntegratedSystem:
                     score=judge_result.get("overall", 0)
                 )
             
-            print(f"Judge evaluation complete. Score: {log['judge_result'].get('overall', 0):.2f}")
-            
-            # PHASE 3: Wizard receives feedback for learning
+            # PHASE 2C: Wizard receives feedback for learning
+            print(f"\n[SYSTEM] Adding judge feedback to wizard's learning buffer...")
             self.wizard.add_judge_feedback(pop.agent_id, log["judge_result"])
             
             # Save the complete log with judge results
             filename = f"{self.wizard.wizard_id}_{pop.agent_id}_{utils.get_timestamp().replace(':', '').replace('-', '')}.json"
             utils.save_conversation_log(log, filename)
+            print(f"[SYSTEM] Conversation log saved: {filename}")
             
             # Update summary
             spec = pop.get_spec()
@@ -187,6 +218,10 @@ class IntegratedSystem:
                 "pop_agent_id": pop.agent_id,
                 "name": spec.get("name"),
                 "personality_description": spec.get("personality_description"),
+                "age": spec.get("age"),
+                "occupation": spec.get("occupation"),
+                "initial_goals": spec.get("initial_goals"),
+                "memory_summary": spec.get("memory_summary"),
                 "system_instruction": spec.get("system_instruction"),
                 "temperature": spec.get("llm_settings", {}).get("temperature"),
                 "max_tokens": spec.get("llm_settings", {}).get("max_tokens"),
@@ -205,12 +240,24 @@ class IntegratedSystem:
                 success=entry["success"],
                 run_no=run_no,
             )
+            
+            print(f"\n{'='*60}")
+            print(f"CONVERSATION {conv_index}/{n} COMPLETE")
+            print(f"{'='*60}\n")
 
-        # Generate population and run conversations
+        # PHASE 2: Generate population agents and run conversations
+        print(f"\n{'='*60}")
+        print("PHASE 2: CREATING AGENTS AND RUNNING CONVERSATIONS")
+        print(f"{'='*60}")
+        
         for idx, spec in enumerate(specs, start=1):
+            # Create agent
+            print(f"\n[GOD] Creating agent {idx}/{n}...")
             agent = self.god.spawn_population_from_spec(spec, run_no, idx)
             
-            print(f"Created agent {idx}/{n}: {agent.name} ({agent.agent_id})")
+            print(f"[GOD] Created: {agent.name} ({agent.agent_id})")
+            print(f"      Age: {agent.age}, Occupation: {agent.occupation}")
+            print(f"      Goals: {agent.initial_goals}")
 
             if config.PARALLEL_CONVERSATIONS:
                 if config.START_WHEN_SPAWNED:
@@ -224,6 +271,8 @@ class IntegratedSystem:
 
             # Check if we've reached an improvement point
             if idx == next_point:
+                print(f"\n[SYSTEM] Reached improvement point at conversation {idx}")
+                
                 if config.PARALLEL_CONVERSATIONS:
                     # Start any queued agents
                     if not config.START_WHEN_SPAWNED:
@@ -236,6 +285,11 @@ class IntegratedSystem:
                     for t in batch_threads:
                         t.join()
                     batch_threads = []
+                
+                # Trigger wizard improvement if scheduled
+                if self.wizard._should_self_improve():
+                    print(f"[WIZARD] Triggering self-improvement...")
+                    # Improvement will happen in wizard's converse_with method
                 
                 # Update to next improvement point
                 schedule_index += 1
@@ -251,29 +305,28 @@ class IntegratedSystem:
             for t in batch_threads:
                 t.join()
 
+        # PHASE 3: Save summary and complete
+        print(f"\n{'='*60}")
+        print("PHASE 3: SAVING RESULTS")
+        print(f"{'='*60}")
+        
         utils.save_conversation_log(summary, f"summary_{run_no}.json")
         self.logger.log_event("system_end", run_no=run_no)
         
-        print(f"\n{'='*60}")
-        print(f"Run #{run_no} Complete!")
+        print(f"\n{'='*80}")
+        print(f"RUN #{run_no} COMPLETE!")
+        print(f"{'='*80}")
         print(f"Total conversations: {len(summary)}")
         print(f"Average score: {sum(e['score'] for e in summary) / len(summary) if summary else 0:.2f}")
         print(f"Successful conversations: {sum(1 for e in summary if e['success'])}")
         print(f"Summary saved to: logs/summary_{run_no}.json")
-        print(f"{'='*60}")
+        print(f"{'='*80}")
         
         # Print judge performance summary
         self._print_judge_performance()
 
     def _aggregate_judge_results(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Aggregate results from multiple judges.
-        
-        Args:
-            results: List of individual judge results
-            
-        Returns:
-            Aggregated result with consensus metrics
-        """
+        """Aggregate results from multiple judges."""
         if not results:
             return {}
         
@@ -295,10 +348,10 @@ class IntegratedSystem:
         }
         
         # Calculate consensus metrics
-        aggregated["judge_consensus"] = all(success_votes) or not any(success_votes)  # All agree
+        aggregated["judge_consensus"] = all(success_votes) or not any(success_votes)
         aggregated["number_of_judges"] = len(results)
         aggregated["score_variance"] = self._calculate_variance(overall_scores)
-        aggregated["confidence"] = 1.0 - (aggregated["score_variance"] * 2)  # Higher variance = lower confidence
+        aggregated["confidence"] = 1.0 - (aggregated["score_variance"] * 2)
         
         # Aggregate rationales
         rationales = [f"{r.get('judge_id', 'Unknown')}: {r.get('rationale', 'No rationale')}" 
@@ -352,23 +405,14 @@ class IntegratedSystem:
         print("="*60 + "\n")
     
     def get_judge_performance_reports(self) -> Dict[str, Any]:
-        """Get performance reports for all judges.
-        
-        Returns:
-            Dictionary mapping judge IDs to their performance reports
-        """
+        """Get performance reports for all judges."""
         return {
             judge.judge_id: judge.get_performance_report() 
             for judge in self.judges
         }
     
     def add_human_feedback(self, conversation_id: str, human_scores: Dict[str, float]) -> None:
-        """Add human feedback for calibrating judges.
-        
-        Args:
-            conversation_id: The pop_agent_id from the conversation
-            human_scores: Dictionary of judge_id -> human score for that judge's evaluation
-        """
+        """Add human feedback for calibrating judges."""
         for judge in self.judges:
             if judge.judge_id in human_scores:
                 judge.add_human_feedback(conversation_id, human_scores[judge.judge_id])
