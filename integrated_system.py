@@ -227,6 +227,20 @@ class IntegratedSystem:
             print(f"\n[SYSTEM] Adding judge feedback to wizard's learning buffer...")
             self.wizard.add_judge_feedback(pop.agent_id, log["judge_result"])
             
+            # Check if wizard should improve immediately after this conversation
+            print(f"\n[SYSTEM] Checking if wizard should improve...")
+            if self.wizard._should_self_improve():
+                print(f"[SYSTEM] 🚀 TRIGGERING WIZARD IMPROVEMENT after conversation {conv_index}")
+                try:
+                    self.wizard.self_improve()
+                    print(f"[SYSTEM] ✅ Wizard improvement completed successfully")
+                except Exception as e:
+                    print(f"[SYSTEM] ❌ Wizard improvement failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print(f"[SYSTEM] ⏳ Wizard improvement not triggered yet")
+            
             # Save the complete log with judge results
             filename = f"{self.wizard.wizard_id}_{pop.agent_id}_{utils.get_timestamp().replace(':', '').replace('-', '')}.json"
             utils.save_conversation_log(log, filename)
