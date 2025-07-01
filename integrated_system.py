@@ -271,60 +271,51 @@ class IntegratedSystem:
         print("PHASE 2: CREATING AGENTS AND RUNNING CONVERSATIONS")
         print(f"{'='*60}")
         
+        # Create all agents first
+        agents = []
         for idx, spec in enumerate(specs, start=1):
-            # Create agent
             print(f"\n[GOD] Creating agent {idx}/{n}...")
             agent = self.god.spawn_population_from_spec(spec, run_no, idx)
             
             print(f"[GOD] Created: {agent.name} ({agent.agent_id})")
             print(f"      Age: {agent.age}, Occupation: {agent.occupation}")
             print(f"      Goals: {agent.initial_goals}")
+            
+            agents.append((agent, idx))
 
-            if config.PARALLEL_CONVERSATIONS:
-                if config.START_WHEN_SPAWNED:
-                    t = threading.Thread(target=run_conversation, args=(agent, idx))
-                    batch_threads.append(t)
-                    t.start()
-                else:
-                    batch_agents.append((agent, idx))
-            else:
-                run_conversation(agent, idx)
-
-            # Check if we've reached an improvement point
-            if idx == next_point:
-                print(f"\n[SYSTEM] Reached improvement point at conversation {idx}")
-                
-                if config.PARALLEL_CONVERSATIONS:
-                    # Start any queued agents
-                    if not config.START_WHEN_SPAWNED:
-                        for ag, ag_idx in batch_agents:
-                            t = threading.Thread(target=run_conversation, args=(ag, ag_idx))
-                            batch_threads.append(t)
-                            t.start()
-                        batch_agents = []
-                    # Wait for all threads to complete
-                    for t in batch_threads:
-                        t.join()
-                    batch_threads = []
-                
-                # Trigger wizard improvement if scheduled
-                if self.wizard._should_self_improve():
-                    print(f"[WIZARD] Triggering self-improvement...")
-                    # Improvement will happen in wizard's converse_with method
-                
-                # Update to next improvement point
-                schedule_index += 1
-                next_point = schedule[schedule_index] if schedule_index < len(schedule) else n + 1
-
-        # Handle any remaining conversations
+        # Now run all conversations
         if config.PARALLEL_CONVERSATIONS:
-            if not config.START_WHEN_SPAWNED:
-                for ag, ag_idx in batch_agents:
-                    t = threading.Thread(target=run_conversation, args=(ag, ag_idx))
-                    batch_threads.append(t)
-                    t.start()
+            print(f"\n[SYSTEM] Running {len(agents)} conversations in parallel...")
+            # Run all conversations in parallel
+            batch_threads = []
+            for agent, idx in agents:
+                t = threading.Thread(target=run_conversation, args=(agent, idx))
+                batch_threads.append(t)
+                t.start()
+            
+            # Wait for all conversations to complete
             for t in batch_threads:
                 t.join()
+                
+            print(f"[SYSTEM] All parallel conversations completed.")
+        else:
+            print(f"\n[SYSTEM] Running {len(agents)} conversations sequentially...")
+            # Run conversations sequentially
+            for agent, idx in agents:
+                run_conversation(agent, idx)
+                
+                # Check if we've reached an improvement point
+                if idx == next_point:
+                    print(f"\n[SYSTEM] Reached improvement point at conversation {idx}")
+                    
+                    # Trigger wizard improvement if scheduled
+                    if self.wizard._should_self_improve():
+                        print(f"[WIZARD] Triggering self-improvement...")
+                        # Improvement will happen based on conversations completed so far
+                    
+                    # Update to next improvement point
+                    schedule_index += 1
+                    next_point = schedule[schedule_index] if schedule_index < len(schedule) else n + 1
 
         # PHASE 3: Save summary and complete
         print(f"\n{'='*60}")
