@@ -4,10 +4,10 @@ services:
     env: python
     buildCommand: |
       pip install -r requirements.txt
-      cd frontend && npm install && npm run build
+      cd frontend && npm install && npm run build && cd ..
     startCommand: python api.py
     envVars:
-      - key: OPENAI_API_KEY='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'
+      - key: OPENAI_API_KEY
         sync: false
       - key: FLASK_SECRET_KEY
         generateValue: true
