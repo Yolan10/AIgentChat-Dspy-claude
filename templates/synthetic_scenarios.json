@@ -1,0 +1,77 @@
+{
+  "hearing_loss_scenarios": [
+    "recently diagnosed with moderate hearing loss",
+    "has worn hearing aids for 10 years",
+    "struggles with hearing in noisy environments",
+    "considering cochlear implant surgery",
+    "family history of hearing loss",
+    "sudden hearing loss from infection",
+    "age-related hearing decline",
+    "workplace noise-induced hearing loss",
+    "born with congenital hearing loss",
+    "experienced hearing loss after military service",
+    "musician with noise-induced hearing damage",
+    "senior citizen with progressive hearing loss"
+  ],
+  
+  "research_topics": [
+    "barriers to hearing aid adoption",
+    "social stigma around hearing loss",
+    "communication strategies",
+    "workplace accommodations",
+    "family impact and support",
+    "treatment satisfaction",
+    "quality of life factors",
+    "healthcare access challenges",
+    "technology adaptation",
+    "peer support networks",
+    "educational accommodations",
+    "mental health impacts"
+  ],
+  
+  "participant_names": [
+    "Sarah", "John", "Maria", "David", "Emma", "Michael", 
+    "Lisa", "Robert", "Jennifer", "William", "Amanda", "James"
+  ],
+  
+  "conversation_quality_indicators": {
+    "good_wizard_behaviors": [
+      "asks specific follow-up questions",
+      "uses empathetic language",
+      "stays focused on research goals",
+      "builds rapport effectively",
+      "generates comprehensive research plan",
+      "validates participant experiences",
+      "explores underlying causes",
+      "maintains professional boundaries"
+    ],
+    "poor_wizard_behaviors": [
+      "asks vague questions",
+      "doesn't follow up on important points",
+      "jumps between topics randomly",
+      "uses clinical/cold language",
+      "fails to generate proper research plan",
+      "dismisses participant concerns",
+      "rushes through topics",
+      "lacks empathy"
+    ],
+    "good_outcomes": [
+      "participant shares detailed experiences",
+      "covers all key research topics",
+      "produces valid JSON research plan",
+      "maintains professional tone",
+      "uncovers actionable insights",
+      "creates trust and rapport",
+      "addresses research objectives fully"
+    ],
+    "poor_outcomes": [
+      "participant gives brief responses",
+      "misses important research areas",
+      "produces incomplete or invalid plan",
+      "conversation feels impersonal",
+      "fails to gather useful data",
+      "participant becomes disengaged",
+      "research objectives not met"
+    ]
+  }
+}
