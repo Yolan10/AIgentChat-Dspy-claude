@@ -967,10 +967,11 @@ def handle_disconnect():
     ws_logger.log_system_event("client_disconnect", {"sid": request.sid})
 
 
-if __name__ == "__main__":
-    utils.ensure_logs_dir()
+# Initialize the database when the module is imported
+utils.ensure_logs_dir()
+init_user_db()
 
-    init_user_db()
+if __name__ == "__main__":
     if len(sys.argv) == 4 and sys.argv[1] == "create_user":
         create_user(sys.argv[2], sys.argv[3])
         print("User created")
