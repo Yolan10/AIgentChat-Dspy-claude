@@ -11,7 +11,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 # Population Settings
 # Default population size. The value must be at least as large as the
 # highest value in ``SELF_IMPROVE_AFTER`` when that setting is a sequence.
-POPULATION_SIZE = 5  # Start with smaller size for testing
+POPULATION_SIZE = 3  # Small size for testing
 POPULATION_INSTRUCTION_TEMPLATE_PATH = "templates/population_instruction.txt"
 
 # Wizard Settings
@@ -22,29 +22,23 @@ WIZARD_DEFAULT_GOAL = (
 )
 # Use the research wizard prompt instead of basic wizard prompt
 WIZARD_PROMPT_TEMPLATE_PATH = "templates/research_wizard_prompt.txt"
-MAX_TURNS = 20
-# Trigger the wizard's self-improvement step. Provide an ``int`` to run the
-# improver every ``n`` conversations or a sequence of ints to trigger on
-# specific conversation counts.  For example::
-#
-#     SELF_IMPROVE_AFTER = [1, 10, 15]  # improve after conversations 1, 10 and 15
-#     SELF_IMPROVE_AFTER = 10           # improve after 10, 20, 30, ...
-# Trigger improvements after conversations 1, 5 and 36 by default.
-SELF_IMPROVE_AFTER = [3, 5]  # Improve after 3rd and 5th conversation for testing
+MAX_TURNS = 10  # Reduced for faster testing
+# Trigger improvements after conversations 2 and 3 for testing
+SELF_IMPROVE_AFTER = [2, 3]
 SELF_IMPROVE_PROMPT_TEMPLATE_PATH = "templates/self_improve_prompt.txt"
 
-# Judge Settings - NEW SECTION
+# Judge Settings
 JUDGE_PROMPT_TEMPLATE_PATH = "templates/judge_prompt.txt"
 # How often judges should attempt to improve their prompts
-JUDGE_IMPROVEMENT_INTERVAL = 20
+JUDGE_IMPROVEMENT_INTERVAL = 10  # Reduced for testing
 # Enable multiple judges for consensus evaluation
-ENABLE_MULTI_JUDGE = False
+ENABLE_MULTI_JUDGE = False  # Keep simple for testing
 # Number of judges when multi-judge is enabled
 JUDGE_COUNT = 3
 # Minimum confidence threshold for valid evaluations
 JUDGE_CONFIDENCE_THRESHOLD = 0.7
 # Minimum samples before calculating performance metrics
-JUDGE_CALIBRATION_MIN_SAMPLES = 10
+JUDGE_CALIBRATION_MIN_SAMPLES = 5  # Reduced for testing
 # Judge-specific LLM settings (optional - uses defaults if not specified)
 JUDGE_LLM_SETTINGS = {
     "temperature": 0.2,  # Lower temperature for more consistent judging
@@ -87,8 +81,8 @@ START_WHEN_SPAWNED = False
 DSPY_TRAINING_ITER = 1
 DSPY_LEARNING_RATE = 0.01
 # Optimizer thresholds
-DSPY_BOOTSTRAP_MINIBATCH_SIZE = 3
-DSPY_MIPRO_MINIBATCH_SIZE = 30
+DSPY_BOOTSTRAP_MINIBATCH_SIZE = 2  # Reduced for testing
+DSPY_MIPRO_MINIBATCH_SIZE = 10  # Reduced for testing
 # Maximum number of conversation logs kept in memory for self improvement
 HISTORY_BUFFER_LIMIT = 50
 # Maximum conversation history stored by each population agent
@@ -113,7 +107,6 @@ def _get_last_schedule_point(schedule):
     except (TypeError, ValueError):
         return None
     return points[-1] if points else None
-
 
 
 def validate_configuration() -> None:
