@@ -83,13 +83,15 @@ class IntegratedSystem:
         self.judgment_lock = threading.Lock()
         self.completed_judgments: Dict[str, Dict[str, Any]] = {}  # Store completed results
         
+        # Initialize shutdown flag BEFORE starting thread
+        self._shutdown = False
+        
         # Start judgment processor thread
         self.judgment_processor = threading.Thread(
             target=self._process_judgments, 
             daemon=True
         )
         self.judgment_processor.start()
-        self._shutdown = False
 
     def _process_judgments(self):
         """Background thread that processes completed judgments."""
