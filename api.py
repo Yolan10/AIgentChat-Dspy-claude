@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-import eventlet
-
-# Ensure eventlet patches standard library modules before other imports
-eventlet.monkey_patch()
-
 import json
 import os
 import secrets
@@ -39,15 +34,18 @@ import utils
 from integrated_system import IntegratedSystem
 from token_tracker import token_tracker
 
-app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
+app = Flask(__name__, static_folder='frontend/dist', static_url_path='')
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
 CORS(app)
-# Use the eventlet async mode to match the Gunicorn worker class
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# Base directory of this file. Allows locating frontend assets reliably
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
+# Configure SocketIO for production
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode="eventlet",
+    logger=True,
+    engineio_logger=True
+)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -67,15 +65,13 @@ def init_user_db():
         cur = conn.execute("SELECT COUNT(*) FROM users")
         count = cur.fetchone()[0]
         if count == 0:
-            admin_password = secrets.token_urlsafe(16)
-            password_hash = generate_password_hash(admin_password)
+            # For production, use admin/admin as default
+            password_hash = generate_password_hash("admin")
             conn.execute(
                 "INSERT INTO users (username, password_hash) VALUES (?, ?)",
                 ("admin", password_hash),
             )
-            print(
-                f"Generated admin credentials - username: 'admin', password: {admin_password}"
-            )
+            print("Created default admin account - username: 'admin', password: 'admin'")
         conn.commit()
 
 
@@ -158,7 +154,7 @@ class WebSocketLogger:
             "agent_id": agent_id,
         }
         self.conversation_buffer.append(turn_data)
-        socketio.start_background_task(socketio.emit, "conversation_turn", turn_data)
+        socketio.emit("conversation_turn", turn_data)
 
     def log_progress(self, completed: int, total: int, run_no: int):
         """Log simulation progress."""
@@ -170,7 +166,7 @@ class WebSocketLogger:
         }
         with simulation_state_lock:
             simulation_state["progress"] = progress_data
-        socketio.start_background_task(socketio.emit, "progress_update", progress_data)
+        socketio.emit("progress_update", progress_data)
 
     def log_system_event(self, event_type: str, data: Dict[str, Any]):
         """Log system events."""
@@ -179,7 +175,7 @@ class WebSocketLogger:
             "timestamp": utils.get_timestamp(),
             "data": data,
         }
-        socketio.start_background_task(socketio.emit, "system_event", event_data)
+        socketio.emit("system_event", event_data)
 
 
 ws_logger = WebSocketLogger()
@@ -212,18 +208,15 @@ def run_simulation_with_logging(instruction: str, population_size: int, goal: st
             },
         )
 
-        # Generate population
-        specs = system.generator.generate(instruction, population_size)
-        population = []
+        # Generate population using the GodAgent directly
+        population = system.god.spawn_population(
+            instruction,
+            population_size,
+            run_no=run_no,
+            start_index=1,
+        )
 
-        for idx, spec in enumerate(specs):
-            if stop_event.is_set():
-                break
-
-            agent = system.god.spawn_population_from_spec(spec, run_no, idx + 1)
-
-            population.append(agent)
-
+        for agent in population:
             ws_logger.log_system_event(
                 "agent_created",
                 {
@@ -266,10 +259,7 @@ def run_simulation_with_logging(instruction: str, population_size: int, goal: st
 
             system.wizard.converse_with = logged_converse
 
-            # Run the conversation
-            log = system.wizard.converse_with(pop)
-
-            # Run the conversation (WITHOUT judging)
+            # Run the conversation once
             log = system.wizard.converse_with(pop)
             
             # Now run the independent judge
@@ -827,49 +817,29 @@ def search_logs():
 
 
 # Serve frontend static files
-@app.route("/")
-def serve_frontend():
-    """Serve the built frontend if available, otherwise fall back to the source files."""
-    dist_dir = os.path.join(BASE_DIR, "frontend", "dist")
-    dist_index = os.path.join(dist_dir, "index.html")
-    if os.path.exists(dist_index):
-        return send_from_directory(dist_dir, "index.html")
-    # If the frontend hasn't been built, serve the unbundled source version
-    fallback_index = os.path.join(BASE_DIR, "frontend", "index.html")
-    if os.path.exists(fallback_index):
-        return send_from_directory(os.path.join(BASE_DIR, "frontend"), "index.html")
-    # In development environments a missing index file would cause a 404.
-    # Display a simple message to aid debugging instead of failing silently.
-    return (
-        "<h1>Frontend not found.\n" "Ensure the React app is built.</h1>",
-        200,
-        {"Content-Type": "text/html"},
-    )
-
-
+@app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_static(path):
-    """Serve static assets from the built frontend or the source directory."""
-    dist_dir = os.path.join(BASE_DIR, "frontend", "dist")
-    dist_path = os.path.join(dist_dir, path)
-    if os.path.exists(dist_path):
-        return send_from_directory(dist_dir, path)
-    return send_from_directory(os.path.join(BASE_DIR, "frontend"), path)
+    """Serve the React app."""
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, "index.html")
 
 
 # WebSocket events
 @socketio.on("connect")
-async def handle_connect():
+def handle_connect():
     """Handle client connection."""
     connected_clients.add(request.sid)
     with simulation_state_lock:
         simulation_state["clients"] = len(connected_clients)
         state_copy = dict(simulation_state)
-    await socketio.emit("status_update", state_copy, to=request.sid)
+    socketio.emit("status_update", state_copy, to=request.sid)
 
 
 @socketio.on("disconnect")
-async def handle_disconnect():
+def handle_disconnect():
     """Handle client disconnection."""
     connected_clients.discard(request.sid)
     with simulation_state_lock:
@@ -885,7 +855,9 @@ if __name__ == "__main__":
         create_user(sys.argv[2], sys.argv[3])
         print("User created")
     else:
-        # Use production settings
+        # Use eventlet for production
+        import eventlet
+        eventlet.monkey_patch()
+        
         port = int(os.environ.get("PORT", 5000))
-        debug = os.environ.get("FLASK_ENV") == "development"
-        socketio.run(app, debug=debug, host="0.0.0.0", port=port)
+        socketio.run(app, debug=False, host="0.0.0.0", port=port)
