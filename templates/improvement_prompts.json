@@ -26,30 +26,40 @@
   },
   
   "scoring_weights": {
-    "research_elements_bonus": 0.02,
-    "improvement_indicators_bonus": 0.01,
-    "innovation_bonus_max": 0.1,
-    "total_bonus_cap": 0.3
+    "research_elements_bonus": 0.03,
+    "improvement_indicators_bonus": 0.02,
+    "innovation_bonus_max": 0.15,
+    "total_bonus_cap": 0.4
   },
   
   "optimizer_settings": {
     "mipro_v2": {
-      "num_candidates": 8,
-      "init_temperature": 1.0,
+      "num_candidates": 12,
+      "init_temperature": 1.2,
       "require_training_set": true,
-      "track_stats": true
+      "track_stats": true,
+      "verbose": true
     },
     "bootstrap_few_shot": {
-      "max_bootstrapped_demos": 5
+      "max_bootstrapped_demos": 8
     },
     "copro": {
-      "breadth": 5
+      "breadth": 8
     }
   },
   
   "synthetic_data_settings": {
-    "good_example_ratio": 0.6,
-    "minimum_dataset_size": 8,
-    "max_synthetic_examples": 20
+    "good_example_ratio": 0.7,
+    "minimum_dataset_size": 3,
+    "max_synthetic_examples": 15,
+    "always_add_synthetic": true,
+    "force_minimum_size": true
+  },
+  
+  "training_settings": {
+    "force_mipro_threshold": 1,
+    "aggressive_optimization": true,
+    "multiple_trials": true,
+    "detailed_logging": true
   }
 }
