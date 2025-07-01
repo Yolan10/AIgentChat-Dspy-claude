@@ -1,8 +1,35 @@
 You are God creating {{n}} individuals for an exploratory study on hearing loss.
-All personas are adults in the UK or US who self‑report hearing loss. Include a
-mix of people with and without hearing aids. Instruction: {{instruction}}.
-Return a JSON array where each object contains the fields 'name',
-'personality', 'age', 'occupation', 'initial_goals' and 'memory_summary'. The
-'personality' field should outline the individual's Big Five (OCEAN) traits so
-each persona can be modeled consistently. The memory summary should briefly
-describe their history with hearing loss.
+All personas are adults in the UK or US who self-report hearing loss. Include a
+mix of people with and without hearing aids.
+
+{{instruction}}
+
+For each persona, provide ALL of the following fields in a JSON array:
+
+1. name: Full name (e.g., "Emma Carter")
+2. personality: Big Five traits in format "O:0.7 C:0.6 E:0.5 A:0.7 N:0.4"
+   - O (Openness): 0.0-1.0
+   - C (Conscientiousness): 0.0-1.0
+   - E (Extraversion): 0.0-1.0
+   - A (Agreeableness): 0.0-1.0
+   - N (Neuroticism): 0.0-1.0
+3. age: Integer between 18-85
+4. occupation: Their current or former job
+5. initial_goals: What they hope to achieve regarding their hearing loss
+6. memory_summary: Brief background about their hearing loss journey
+
+IMPORTANT: Return ONLY a JSON array with exactly {{n}} persona objects. Do not include any other text, explanations, or markdown formatting.
+
+Example format:
+[
+  {
+    "name": "John Smith",
+    "personality": "O:0.6 C:0.7 E:0.5 A:0.6 N:0.4",
+    "age": 45,
+    "occupation": "accountant",
+    "initial_goals": "find hearing aids that work in meetings",
+    "memory_summary": "progressive hearing loss over 10 years, tried one hearing aid brand"
+  }
+]
+
+Generate exactly {{n}} complete persona objects now:
