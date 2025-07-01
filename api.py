@@ -843,6 +843,7 @@ def serve_frontend():
     )
 
 
+
 @app.route("/<path:path>")
 def serve_static(path):
     """Serve static assets from the built frontend or the source directory."""
