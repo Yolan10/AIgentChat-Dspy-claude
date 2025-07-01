@@ -5,7 +5,8 @@ services:
     buildCommand: |
       pip install -r requirements.txt
       cd frontend && npm install && npm run build && cd ..
-    startCommand: python api.py
+      chmod +x start.sh
+    startCommand: ./start.sh
     envVars:
       - key: OPENAI_API_KEY
         sync: false
