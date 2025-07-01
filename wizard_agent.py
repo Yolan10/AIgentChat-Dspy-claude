@@ -317,6 +317,3 @@ class WizardAgent:
             recent_logs = list(self.history_buffer)[-5:]
             self.history_buffer.clear()
             self.history_buffer.extend(recent_logs)
-
-        # Clear history buffer after improvement
-        self.history_buffer.clear()
