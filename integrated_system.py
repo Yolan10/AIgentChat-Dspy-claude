@@ -83,15 +83,13 @@ class IntegratedSystem:
         self.judgment_lock = threading.Lock()
         self.completed_judgments: Dict[str, Dict[str, Any]] = {}  # Store completed results
         
-        # Initialize shutdown flag BEFORE starting thread
-        self._shutdown = False
-        
         # Start judgment processor thread
         self.judgment_processor = threading.Thread(
             target=self._process_judgments, 
             daemon=True
         )
         self.judgment_processor.start()
+        self._shutdown = False
 
     def _process_judgments(self):
         """Background thread that processes completed judgments."""
@@ -304,32 +302,7 @@ class IntegratedSystem:
             utils.save_conversation_log(log, filename)
             print(f"[SYSTEM] Conversation log saved: {filename}")
 
-            # Check if we're at an improvement point
-            if conv_index in improvement_points:
-                print(f"\n{'*'*60}")
-                print(f"[SYSTEM] 🔄 IMPROVEMENT CHECKPOINT after conversation {conv_index}")
-                print(f"{'*'*60}")
-                
-                # Wait for all pending judgments before improvement
-                self._wait_for_pending_judgments()
-                
-                # Check if wizard should improve
-                print(f"\n[SYSTEM] Checking if wizard should improve...")
-                print(f"[SYSTEM] Wizard conversation count: {self.wizard.conversation_count}")
-                print(f"[SYSTEM] Judged conversations in buffer: {sum(1 for log in self.wizard.history_buffer if 'judge_result' in log)}")
-                
-                if self.wizard._should_self_improve():
-                    print(f"[SYSTEM] 🚀 TRIGGERING WIZARD IMPROVEMENT")
-                    try:
-                        self.wizard.self_improve()
-                        print(f"[SYSTEM] ✅ Wizard improvement completed successfully")
-                    except Exception as e:
-                        print(f"[SYSTEM] ❌ Wizard improvement failed: {e}")
-                        import traceback
-                        traceback.print_exc()
-                else:
-                    print(f"[SYSTEM] ⏳ Conditions not met for improvement yet")
-
+            # Note: Improvement will be handled at batch boundaries
             print(f"\n{'='*60}")
             print(f"CONVERSATION {conv_index}/{n} WORKFLOW COMPLETE")
             print(f"{'='*60}\n")
@@ -348,16 +321,68 @@ class IntegratedSystem:
             print(f"      Goals: {agent.initial_goals}")
             agents.append((agent, idx))
 
+        # Process conversations in batches defined by improvement points
         if getattr(config, 'PARALLEL_CONVERSATIONS', False):
-            print(f"\n[SYSTEM] Running {len(agents)} conversations in parallel...")
-            batch_threads = []
-            for agent, idx in agents:
-                t = threading.Thread(target=run_conversation, args=(agent, idx))
-                batch_threads.append(t)
-                t.start()
-            for t in batch_threads:
-                t.join()
-            print(f"[SYSTEM] All parallel conversations completed.")
+            print(f"\n[SYSTEM] Running conversations in PARALLEL BATCHES")
+            
+            # Create batch boundaries based on improvement points
+            batch_boundaries = [0] + sorted(improvement_points) + [n]
+            batches = []
+            for i in range(len(batch_boundaries) - 1):
+                start = batch_boundaries[i]
+                end = batch_boundaries[i + 1]
+                batches.append((start + 1, end))
+            
+            print(f"[SYSTEM] Batch structure based on improvement points:")
+            for i, (start, end) in enumerate(batches):
+                print(f"         Batch {i + 1}: Conversations {start} to {end}")
+            
+            # Process each batch
+            for batch_idx, (batch_start, batch_end) in enumerate(batches):
+                print(f"\n{'='*70}")
+                print(f"BATCH {batch_idx + 1}: Running conversations {batch_start} to {batch_end} in parallel")
+                print(f"{'='*70}")
+                
+                batch_threads = []
+                for agent, idx in agents[batch_start-1:batch_end]:
+                    t = threading.Thread(target=run_conversation, args=(agent, idx))
+                    batch_threads.append(t)
+                    t.start()
+                
+                # Wait for all conversations in this batch to complete
+                for t in batch_threads:
+                    t.join()
+                
+                print(f"\n[SYSTEM] Batch {batch_idx + 1} completed ({batch_end - batch_start + 1} conversations)")
+                
+                # Wait for judgments and check for improvement at batch end
+                if batch_end in improvement_points:
+                    print(f"\n{'*'*70}")
+                    print(f"[SYSTEM] 🔄 IMPROVEMENT CHECKPOINT after conversation {batch_end}")
+                    print(f"{'*'*70}")
+                    
+                    # Wait for all pending judgments
+                    self._wait_for_pending_judgments()
+                    
+                    # Check if wizard should improve
+                    print(f"\n[SYSTEM] Checking if wizard should improve...")
+                    print(f"[SYSTEM] Wizard conversation count: {self.wizard.conversation_count}")
+                    print(f"[SYSTEM] Judged conversations in buffer: {sum(1 for log in self.wizard.history_buffer if 'judge_result' in log)}")
+                    
+                    if self.wizard._should_self_improve():
+                        print(f"[SYSTEM] 🚀 TRIGGERING WIZARD IMPROVEMENT")
+                        try:
+                            self.wizard.self_improve()
+                            print(f"[SYSTEM] ✅ Wizard improvement completed successfully")
+                            print(f"[SYSTEM] Next batch will use the improved prompt")
+                        except Exception as e:
+                            print(f"[SYSTEM] ❌ Wizard improvement failed: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    else:
+                        print(f"[SYSTEM] ⏳ Conditions not met for improvement yet")
+                    
+                    print(f"{'*'*70}\n")
         else:
             print(f"\n[SYSTEM] Running {len(agents)} conversations sequentially...")
             for agent, idx in agents:
