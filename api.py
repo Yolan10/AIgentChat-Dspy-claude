@@ -816,6 +816,30 @@ def search_logs():
     return jsonify(results[offset : offset + limit])
 
 
+# Debug route
+@app.route("/debug")
+def debug_page():
+    """Serve a simple debug page"""
+    debug_html = '''<!DOCTYPE html>
+<html>
+<head><title>AIgentChat Debug</title></head>
+<body>
+<h1>AIgentChat Debug Info</h1>
+<p>Flask is running correctly!</p>
+<p>Current working directory: ''' + os.getcwd() + '''</p>
+<p>Frontend dist exists: ''' + str(os.path.exists("frontend/dist")) + '''</p>
+<p>Frontend dist contents: ''' + str(os.listdir("frontend/dist") if os.path.exists("frontend/dist") else "Directory not found") + '''</p>
+<h2>Test Links:</h2>
+<ul>
+<li><a href="/api/status">API Status</a></li>
+<li><a href="/api/check_auth">Auth Check</a></li>
+<li><a href="/">Frontend (if built)</a></li>
+</ul>
+</body>
+</html>'''
+    return debug_html
+
+
 # Serve frontend static files
 @app.route("/")
 def serve_frontend():
