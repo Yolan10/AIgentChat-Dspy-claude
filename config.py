@@ -2,65 +2,51 @@
 
 import os
 
-# Expose the OpenAI API key if provided via environment variable. This mirrors
-# the example in the README so scripts can directly reference
-# ``config.OPENAI_API_KEY`` without raising ``NameError`` when the variable is
-# missing.
+# Expose the OpenAI API key if provided via environment variable
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 # Population Settings
-# Default population size. The value must be at least as large as the
-# highest value in ``SELF_IMPROVE_AFTER`` when that setting is a sequence.
-POPULATION_SIZE = 3  # Small size for testing
+POPULATION_SIZE = 5  # Increased from 3 to trigger more improvements
 POPULATION_INSTRUCTION_TEMPLATE_PATH = "templates/population_instruction.txt"
 
 # Wizard Settings
-# Default goal for the wizard when acting as a research planner
 WIZARD_DEFAULT_GOAL = (
     "Uncover key insights about hearing loss experiences and generate a"
     " structured research plan"
 )
-# Use the research wizard prompt instead of basic wizard prompt
 WIZARD_PROMPT_TEMPLATE_PATH = "templates/research_wizard_prompt.txt"
-MAX_TURNS = 10  # Reduced for faster testing
-# Trigger improvements after conversations 1 and 2 for immediate testing
-SELF_IMPROVE_AFTER = [1, 2]  # Changed from [2, 3] to trigger sooner
+MAX_TURNS = 10
+
+# CRITICAL: Self-improvement schedule - triggers after specific conversations
+# Option 1: Every N conversations
+# SELF_IMPROVE_AFTER = 2  # Improve every 2 conversations
+
+# Option 2: After specific conversation numbers (RECOMMENDED for testing)
+SELF_IMPROVE_AFTER = [1, 3, 5]  # Improve after 1st, 3rd, and 5th conversations
+
+# Option 3: String format (alternative to list)
+# SELF_IMPROVE_AFTER = "1;3;5"  # Same as above but as string
+
 SELF_IMPROVE_PROMPT_TEMPLATE_PATH = "templates/self_improve_prompt.txt"
 
 # Judge Settings
 JUDGE_PROMPT_TEMPLATE_PATH = "templates/judge_prompt.txt"
-# How often judges should attempt to improve their prompts
-JUDGE_IMPROVEMENT_INTERVAL = 10  # Reduced for testing
-# Enable multiple judges for consensus evaluation
+JUDGE_IMPROVEMENT_INTERVAL = 10  # How often judges improve
 ENABLE_MULTI_JUDGE = False  # Keep simple for testing
-# Number of judges when multi-judge is enabled
 JUDGE_COUNT = 3
-# Minimum confidence threshold for valid evaluations
 JUDGE_CONFIDENCE_THRESHOLD = 0.7
-# Minimum samples before calculating performance metrics
-JUDGE_CALIBRATION_MIN_SAMPLES = 5  # Reduced for testing
-# Judge-specific LLM settings (optional - uses defaults if not specified)
+JUDGE_CALIBRATION_MIN_SAMPLES = 5
 JUDGE_LLM_SETTINGS = {
-    "temperature": 0.2,  # Lower temperature for more consistent judging
-    "max_tokens": 1024,  # Sufficient for detailed evaluations
+    "temperature": 0.2,
+    "max_tokens": 1024,
 }
 
 # LLM Hyperparameters
-# Default model to use for all LLM calls. Options as of 2025:
-LLM_MODEL = "gpt-4.1-nano"  # Fastest, cheapest
-# or
-# LLM_MODEL = "gpt-4.1-mini"  # Balanced performance
-# or
-# LLM_MODEL = "gpt-4.1"       # Most capable
-
-# Legacy models still available:
-# LLM_MODEL = "gpt-4o"
-# LLM_MODEL = "gpt-4o-mini"
-
+LLM_MODEL = "gpt-4.1-nano"  # Fast and cheap for testing
 LLM_TEMPERATURE = 0.7
 LLM_MAX_TOKENS = 512
 LLM_TOP_P = 0.9
-OPENAI_MAX_RETRIES = 3  # Increased for better reliability
+OPENAI_MAX_RETRIES = 3
 
 # File/Logging Settings
 LOGS_DIRECTORY = "logs"
@@ -68,28 +54,27 @@ JSON_INDENT = 2
 USER_DB_PATH = "users.db"
 
 # Runtime Options
-# Set to True to print conversation turns to the terminal while running
-SHOW_LIVE_CONVERSATIONS = True
-# Run each conversation in its own thread - ENABLED for better performance
-PARALLEL_CONVERSATIONS = True  # Changed from False to True
-# If True and conversations run in parallel, start each thread as soon as the
-# population agent is spawned instead of waiting for the full population to be
-# generated.
+SHOW_LIVE_CONVERSATIONS = True  # See conversations in real-time
+PARALLEL_CONVERSATIONS = False  # Sequential is better for debugging improvements
 START_WHEN_SPAWNED = False
 
-# Wizard Improvement Templates
+# Wizard Improvement Templates (CRITICAL for DSPy)
 SYNTHETIC_SCENARIOS_TEMPLATE_PATH = "templates/synthetic_scenarios.json"
 SYNTHETIC_CONVERSATION_TEMPLATE_PATH = "templates/synthetic_conversation_templates.json"
 PERFORMANCE_ANALYSIS_TEMPLATE_PATH = "templates/performance_analysis_template.txt"
 IMPROVEMENT_PROMPTS_TEMPLATE_PATH = "templates/improvement_prompts.json"
-DSPY_TRAINING_ITER = 2  # Increased for better optimization
+
+# DSPy Training Parameters (CRITICAL)
+DSPY_TRAINING_ITER = 3  # Number of training iterations
 DSPY_LEARNING_RATE = 0.01
-# Optimizer thresholds - lowered to enable MIPROv2 sooner
-DSPY_BOOTSTRAP_MINIBATCH_SIZE = 3  # Reduced for faster activation
-DSPY_MIPRO_MINIBATCH_SIZE = 5  # Reduced to use MIPROv2 with smaller datasets
-# Maximum number of conversation logs kept in memory for self improvement
-HISTORY_BUFFER_LIMIT = 50
-# Maximum conversation history stored by each population agent
+
+# CRITICAL: Thresholds for optimizer selection
+# These determine which DSPy optimizer is used based on dataset size
+DSPY_BOOTSTRAP_MINIBATCH_SIZE = 2  # Use BootstrapFewShot with 2+ examples
+DSPY_MIPRO_MINIBATCH_SIZE = 4  # Use MIPROv2 with 4+ examples
+
+# History buffer limits
+HISTORY_BUFFER_LIMIT = 50  # Keep last 50 conversations for improvement
 POP_HISTORY_LIMIT = 50
 
 # Miscellaneous
@@ -114,14 +99,7 @@ def _get_last_schedule_point(schedule):
 
 
 def validate_configuration() -> None:
-    """Validate cross-field relationships in the configuration.
-
-    Currently ensures ``POPULATION_SIZE`` is large enough to support the
-    self‑improvement schedule defined in ``SELF_IMPROVE_AFTER``.  This function
-    should be called at runtime so unit tests can override settings via
-    ``monkeypatch`` without importing this module twice.
-    """
-
+    """Validate cross-field relationships in the configuration."""
     last_point = _get_last_schedule_point(SELF_IMPROVE_AFTER)
     if last_point is not None and POPULATION_SIZE < last_point:
         raise ValueError(
