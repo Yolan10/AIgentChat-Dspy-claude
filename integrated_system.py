@@ -1,9 +1,11 @@
-"""High level integration layer with SEPARATE judge orchestration."""
+"""High level integration layer with SEPARATE judge orchestration and PARALLEL judging."""
 from __future__ import annotations
 
 from typing import List, Dict, Any
 import threading
 import time
+import queue
+from concurrent.futures import ThreadPoolExecutor, Future
 
 import config
 import utils
@@ -14,7 +16,7 @@ from token_tracker import token_tracker
 
 
 class IntegratedSystem:
-    """Coordinates population generation, conversations and INDEPENDENT judging."""
+    """Coordinates population generation, conversations and INDEPENDENT PARALLEL judging."""
 
     def __init__(
         self,
@@ -23,6 +25,7 @@ class IntegratedSystem:
         judge_agent_cls=None,
         logger: StructuredLogger | None = None,
         generator: PopulationGenerator | None = None,
+        max_judge_workers: int = None,
     ) -> None:
         """Initialize the system with injectable dependencies."""
         if god_agent_cls is None or wizard_agent_cls is None or judge_agent_cls is None:
@@ -72,6 +75,140 @@ class IntegratedSystem:
         else:
             self.judges = [self.primary_judge]
 
+        # Parallel judging infrastructure
+        self.max_judge_workers = max_judge_workers or getattr(config, 'MAX_JUDGE_WORKERS', 3)
+        self.judge_executor = ThreadPoolExecutor(max_workers=self.max_judge_workers)
+        self.pending_judgments: Dict[str, Future] = {}  # conversation_id -> Future
+        self.judgment_queue = queue.Queue()  # Queue for completed judgments
+        self.judgment_lock = threading.Lock()
+        self.completed_judgments: Dict[str, Dict[str, Any]] = {}  # Store completed results
+        
+        # Start judgment processor thread
+        self.judgment_processor = threading.Thread(
+            target=self._process_judgments, 
+            daemon=True
+        )
+        self.judgment_processor.start()
+        self._shutdown = False
+
+    def _process_judgments(self):
+        """Background thread that processes completed judgments."""
+        while not self._shutdown:
+            try:
+                # Get completed judgment from queue
+                judgment_data = self.judgment_queue.get(timeout=1)
+                
+                if judgment_data is None:  # Shutdown signal
+                    break
+                    
+                conversation_id = judgment_data["conversation_id"]
+                judge_result = judgment_data["judge_result"]
+                log = judgment_data["log"]
+                
+                # Store completed judgment
+                with self.judgment_lock:
+                    self.completed_judgments[conversation_id] = {
+                        "judge_result": judge_result,
+                        "log": log,
+                        "timestamp": utils.get_timestamp()
+                    }
+                
+                # Add feedback to wizard
+                self.wizard.add_judge_feedback(conversation_id, judge_result)
+                
+                print(f"[JUDGE] ✓ Processed judgment for {conversation_id}")
+                print(f"         Score: {self._extract_score_value(judge_result.get('overall', judge_result.get('score', 0))):.2f}")
+                
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"[JUDGE] Error processing judgment: {e}")
+                import traceback
+                traceback.print_exc()
+
+    def _submit_for_judgment(self, log: Dict[str, Any], pop_agent_id: str):
+        """Submit a conversation for parallel judgment."""
+        def judge_task():
+            try:
+                print(f"[JUDGE] → Starting evaluation of {pop_agent_id}...")
+                
+                if self.enable_multi_judge:
+                    judge_results = []
+                    for judge in self.judges:
+                        result = judge.assess(log)
+                        judge_results.append(result)
+                    
+                    aggregated_result = self._aggregate_judge_results(judge_results)
+                    aggregated_result["individual_judge_results"] = judge_results
+                    aggregated_result["judge_consensus"] = aggregated_result.get("judge_consensus", False)
+                    judge_result = aggregated_result
+                else:
+                    judge_result = self.primary_judge.assess(log)
+                
+                # Put result in queue for processing
+                self.judgment_queue.put({
+                    "conversation_id": pop_agent_id,
+                    "judge_result": judge_result,
+                    "log": log
+                })
+                
+                return judge_result
+            except Exception as e:
+                print(f"[JUDGE] Error evaluating {pop_agent_id}: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
+        
+        # Submit to thread pool
+        future = self.judge_executor.submit(judge_task)
+        
+        with self.judgment_lock:
+            self.pending_judgments[pop_agent_id] = future
+        
+        return future
+
+    def _wait_for_pending_judgments(self, timeout: int = None):
+        """Wait for all pending judgments to complete."""
+        if timeout is None:
+            timeout = getattr(config, 'JUDGE_TIMEOUT', 60)
+            
+        with self.judgment_lock:
+            pending_count = len(self.pending_judgments)
+            
+        if pending_count == 0:
+            print(f"[SYSTEM] No pending judgments to wait for")
+            return
+            
+        print(f"[SYSTEM] ⏳ Waiting for {pending_count} pending judgments (timeout: {timeout}s)...")
+        
+        start_time = time.time()
+        with self.judgment_lock:
+            futures = list(self.pending_judgments.values())
+        
+        completed = 0
+        failed = 0
+        for future in futures:
+            remaining_time = timeout - (time.time() - start_time)
+            if remaining_time > 0:
+                try:
+                    future.result(timeout=remaining_time)
+                    completed += 1
+                except Exception as e:
+                    print(f"[SYSTEM] Judgment failed: {e}")
+                    failed += 1
+            else:
+                print(f"[SYSTEM] Timeout waiting for judgments")
+                break
+        
+        print(f"[SYSTEM] ✓ Completed {completed}/{len(futures)} judgments ({failed} failed)")
+        
+        # Allow queue processing to catch up
+        time.sleep(0.5)
+        
+        # Clear pending judgments
+        with self.judgment_lock:
+            self.pending_judgments.clear()
+
     def _extract_score_value(self, score_data: Any) -> float:
         """Extract a numeric score from various possible formats."""
         if isinstance(score_data, (int, float)):
@@ -93,7 +230,7 @@ class IntegratedSystem:
         stop_event: threading.Event | None = None,
         pause_event: threading.Event | None = None,
     ) -> None:
-        """Run simulation with separate conversation and judging phases."""
+        """Run simulation with separate conversation and PARALLEL judging phases."""
         run_no = utils.increment_run_number()
         self.wizard.set_run(run_no)
         token_tracker.set_run(run_no)
@@ -105,6 +242,7 @@ class IntegratedSystem:
         print(f"Population size: {n}")
         print(f"Wizard goal: {self.wizard.goal}")
         print(f"Instruction: {instruction}")
+        print(f"Parallel judge workers: {self.max_judge_workers}")
         print(f"{'='*80}\n")
 
         # PHASE 1: Generate population specs
@@ -117,30 +255,17 @@ class IntegratedSystem:
 
         summary: List[dict] = []
 
-        def _parse_schedule(total: int) -> List[int]:
-            sched = getattr(config, 'SELF_IMPROVE_AFTER', 0)
-            points: List[int] = []
-            if isinstance(sched, int):
-                if sched > 0:
-                    points = list(range(sched, total + 1, sched))
-            elif isinstance(sched, str):
-                try:
-                    points = [int(x) for x in sched.split(";") if x.strip()]
-                except ValueError:
-                    points = []
-            else:
-                try:
-                    points = [int(x) for x in sched]
-                except Exception:
-                    points = []
-            return sorted({p for p in points if p <= total})
-
-        schedule = _parse_schedule(n)
-        schedule_index = 0
-        next_point = schedule[schedule_index] if schedule else n + 1
+        # Parse improvement schedule
+        schedule = self._parse_schedule(n)
+        improvement_points = set(schedule)
+        
+        if improvement_points:
+            print(f"[SYSTEM] Wizard improvement scheduled after conversations: {sorted(improvement_points)}")
+        else:
+            print(f"[SYSTEM] No wizard improvements scheduled")
 
         def run_conversation(pop, conv_index):
-            """Run a conversation and have it independently judged."""
+            """Run a conversation and submit for parallel judgment."""
             if stop_event and stop_event.is_set():
                 return
             if pause_event:
@@ -151,128 +276,60 @@ class IntegratedSystem:
             print(f"CONVERSATION {conv_index}/{n}: {pop.name} ({pop.agent_id})")
             print(f"{'='*60}")
 
-            # PHASE 2A: Wizard converses WITHOUT judging
+            # PHASE 2A: Wizard converses WITHOUT waiting for judging
             print(f"\n[WIZARD] Starting conversation with {pop.name}...")
             print("-" * 40)
 
             try:
-                log = self.wizard.converse_with(pop, show_live=getattr(config, 'SHOW_LIVE_CONVERSATIONS', False))
+                log = self.wizard.converse_with(
+                    pop, 
+                    show_live=getattr(config, 'SHOW_LIVE_CONVERSATIONS', False)
+                )
                 print("-" * 40)
-                print(f"[WIZARD] Conversation with {pop.name} completed.")
+                print(f"[WIZARD] ✓ Conversation with {pop.name} completed.")
                 print(f"         Total turns: {len(log.get('turns', []))}")
             except Exception as e:
                 print(f"[ERROR] Conversation failed with {pop.name}: {e}")
                 self.logger.log_event("conversation_error", agent_id=pop.agent_id, error=str(e))
                 return
 
-            # PHASE 2B: Independent judging
-            print(f"\n[JUDGE] Evaluating conversation with {pop.name}...")
+            # PHASE 2B: Submit for parallel judging (non-blocking)
+            print(f"\n[JUDGE] → Submitting {pop.agent_id} for parallel evaluation...")
+            self._submit_for_judgment(log, pop.agent_id)
 
-            if self.enable_multi_judge:
-                judge_results = []
-                for judge in self.judges:
-                    print(f"  - {judge.judge_id} evaluating...")
-                    result = judge.assess(log)
-                    judge_results.append(result)
-                    overall_score = self._extract_score_value(result.get('overall', result.get('score', 0)))
-                    print(f"    Score: {overall_score:.2f}")
-                    self.logger.log_event(
-                        "individual_judge_complete",
-                        judge_id=judge.judge_id,
-                        agent_id=pop.agent_id,
-                        score=overall_score
-                    )
-
-                aggregated_result = self._aggregate_judge_results(judge_results)
-                log["judge_result"] = aggregated_result
-                log["individual_judge_results"] = judge_results
-                log["judge_consensus"] = aggregated_result.get("judge_consensus", False)
-
-                print(f"\n[JUDGE] Consensus evaluation complete:")
-                print(f"  - Overall Score: {self._extract_score_value(aggregated_result.get('overall', 0)):.2f}")
-                print(f"  - Goal Completion: {self._extract_score_value(aggregated_result.get('goal_completion', 0)):.2f}")
-                print(f"  - Coherence: {self._extract_score_value(aggregated_result.get('coherence', 0)):.2f}")
-                print(f"  - Tone: {self._extract_score_value(aggregated_result.get('tone', 0)):.2f}")
-                print(f"  - Success: {aggregated_result.get('success', False)}")
-                print(f"  - Judge Agreement: {aggregated_result.get('judge_consensus', False)}")
-            else:
-                judge_result = self.primary_judge.assess(log)
-                log["judge_result"] = judge_result
-
-                print(f"\n[JUDGE] Evaluation complete:")
-                print(f"  - Overall Score: {self._extract_score_value(judge_result.get('overall', judge_result.get('score', 0))):.2f}")
-                print(f"  - Goal Completion: {self._extract_score_value(judge_result.get('goal_completion', 0)):.2f}")
-                print(f"  - Coherence: {self._extract_score_value(judge_result.get('coherence', 0)):.2f}")
-                print(f"  - Tone: {self._extract_score_value(judge_result.get('tone', 0)):.2f}")
-                print(f"  - Success: {judge_result.get('success', False)}")
-
-                self.logger.log_event(
-                    "judge_complete",
-                    judge_id=self.primary_judge.judge_id,
-                    agent_id=pop.agent_id,
-                    score=self._extract_score_value(judge_result.get("overall", judge_result.get("score", 0)))
-                )
-
-            # PHASE 2C: Wizard receives feedback for learning
-            print(f"\n[SYSTEM] Adding judge feedback to wizard's learning buffer...")
-            self.wizard.add_judge_feedback(pop.agent_id, log["judge_result"])
-
-            # Check if wizard should improve immediately after this conversation
-            print(f"\n[SYSTEM] Checking if wizard should improve...")
-            if self.wizard._should_self_improve():
-                print(f"[SYSTEM] 🚀 TRIGGERING WIZARD IMPROVEMENT after conversation {conv_index}")
-                try:
-                    self.wizard.self_improve()
-                    print(f"[SYSTEM] ✅ Wizard improvement completed successfully")
-                except Exception as e:
-                    print(f"[SYSTEM] ❌ Wizard improvement failed: {e}")
-                    import traceback
-                    traceback.print_exc()
-            else:
-                print(f"[SYSTEM] ⏳ Wizard improvement not triggered yet")
-
+            # Save conversation log immediately (without judge result)
             filename = f"{self.wizard.wizard_id}_{pop.agent_id}_{utils.get_timestamp().replace(':', '').replace('-', '')}.json"
             utils.save_conversation_log(log, filename)
             print(f"[SYSTEM] Conversation log saved: {filename}")
 
-            # Update summary - extract numeric values for storage
-            spec = pop.get_spec()
-            judge_result = log["judge_result"]
-            entry = {
-                "pop_agent_id": pop.agent_id,
-                "name": spec.get("name"),
-                "personality_description": spec.get("personality_description"),
-                "age": spec.get("age"),
-                "occupation": spec.get("occupation"),
-                "initial_goals": spec.get("initial_goals"),
-                "memory_summary": spec.get("memory_summary"),
-                "system_instruction": spec.get("system_instruction"),
-                "temperature": spec.get("llm_settings", {}).get("temperature"),
-                "max_tokens": spec.get("llm_settings", {}).get("max_tokens"),
-                "success": judge_result.get("success"),
-                "goal_completion": self._extract_score_value(judge_result.get("goal_completion")),
-                "coherence": self._extract_score_value(judge_result.get("coherence")),
-                "tone": self._extract_score_value(judge_result.get("tone")),
-                "score": self._extract_score_value(judge_result.get("overall", judge_result.get("score", 0))),
-                "judge_consensus": log.get("judge_consensus", True),
-            }
-
-            summary.append(entry)
-            self.logger.log_event(
-                "conversation_end",
-                pop_agent=pop.agent_id,
-                success=entry["success"],
-                run_no=run_no,
-            )
+            # Check if we're at an improvement point
+            if conv_index in improvement_points:
+                print(f"\n{'*'*60}")
+                print(f"[SYSTEM] 🔄 IMPROVEMENT CHECKPOINT after conversation {conv_index}")
+                print(f"{'*'*60}")
+                
+                # Wait for all pending judgments before improvement
+                self._wait_for_pending_judgments()
+                
+                # Check if wizard should improve
+                print(f"\n[SYSTEM] Checking if wizard should improve...")
+                print(f"[SYSTEM] Wizard conversation count: {self.wizard.conversation_count}")
+                print(f"[SYSTEM] Judged conversations in buffer: {sum(1 for log in self.wizard.history_buffer if 'judge_result' in log)}")
+                
+                if self.wizard._should_self_improve():
+                    print(f"[SYSTEM] 🚀 TRIGGERING WIZARD IMPROVEMENT")
+                    try:
+                        self.wizard.self_improve()
+                        print(f"[SYSTEM] ✅ Wizard improvement completed successfully")
+                    except Exception as e:
+                        print(f"[SYSTEM] ❌ Wizard improvement failed: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"[SYSTEM] ⏳ Conditions not met for improvement yet")
 
             print(f"\n{'='*60}")
-            print(f"CONVERSATION {conv_index}/{n} COMPLETE")
-            print(f"Agent: {pop.name} ({pop.agent_id})")
-            print(f"Success: {entry['success']}")
-            print(f"Overall Score: {entry['score']:.2f}")
-            print(f"Wizard Conversations Completed: {self.wizard.conversation_count}")
-            print(f"Wizard History Buffer: {len(self.wizard.history_buffer)} conversations")
-            print(f"Judged Conversations: {sum(1 for log in self.wizard.history_buffer if 'judge_result' in log)}")
+            print(f"CONVERSATION {conv_index}/{n} WORKFLOW COMPLETE")
             print(f"{'='*60}\n")
 
         # PHASE 2: Generate population agents and run conversations
@@ -304,11 +361,80 @@ class IntegratedSystem:
             for agent, idx in agents:
                 run_conversation(agent, idx)
 
-        # PHASE 3: Save summary and complete
+        # PHASE 3: Final judgment collection and summary
         print(f"\n{'='*60}")
-        print("PHASE 3: SAVING RESULTS")
+        print("PHASE 3: FINALIZING JUDGMENTS AND SAVING RESULTS")
         print(f"{'='*60}")
+        
+        # Wait for any remaining judgments
+        print(f"\n[SYSTEM] Waiting for final judgments to complete...")
+        self._wait_for_pending_judgments()
+        
+        # Give a bit more time for queue processing
+        time.sleep(1)
+        
+        # Compile final summary with judge results
+        print(f"\n[SYSTEM] Compiling final summary with judge results...")
+        
+        with self.judgment_lock:
+            completed_count = len(self.completed_judgments)
+            
+        print(f"[SYSTEM] Collected {completed_count} judge evaluations")
+        
+        # Create summary entries
+        for agent, idx in agents:
+            spec = agent.get_spec()
+            
+            # Get judge result if available
+            judge_result = None
+            with self.judgment_lock:
+                if agent.agent_id in self.completed_judgments:
+                    judge_result = self.completed_judgments[agent.agent_id]["judge_result"]
+            
+            if judge_result:
+                entry = {
+                    "pop_agent_id": agent.agent_id,
+                    "name": spec.get("name"),
+                    "personality_description": spec.get("personality_description"),
+                    "age": spec.get("age"),
+                    "occupation": spec.get("occupation"),
+                    "initial_goals": spec.get("initial_goals"),
+                    "memory_summary": spec.get("memory_summary"),
+                    "system_instruction": spec.get("system_instruction"),
+                    "temperature": spec.get("llm_settings", {}).get("temperature"),
+                    "max_tokens": spec.get("llm_settings", {}).get("max_tokens"),
+                    "success": judge_result.get("success"),
+                    "goal_completion": self._extract_score_value(judge_result.get("goal_completion")),
+                    "coherence": self._extract_score_value(judge_result.get("coherence")),
+                    "tone": self._extract_score_value(judge_result.get("tone")),
+                    "score": self._extract_score_value(judge_result.get("overall", judge_result.get("score", 0))),
+                    "judge_consensus": judge_result.get("judge_consensus", True) if self.enable_multi_judge else True,
+                }
+            else:
+                # No judge result available
+                entry = {
+                    "pop_agent_id": agent.agent_id,
+                    "name": spec.get("name"),
+                    "personality_description": spec.get("personality_description"),
+                    "age": spec.get("age"),
+                    "occupation": spec.get("occupation"),
+                    "initial_goals": spec.get("initial_goals"),
+                    "memory_summary": spec.get("memory_summary"),
+                    "system_instruction": spec.get("system_instruction"),
+                    "temperature": spec.get("llm_settings", {}).get("temperature"),
+                    "max_tokens": spec.get("llm_settings", {}).get("max_tokens"),
+                    "success": None,
+                    "goal_completion": None,
+                    "coherence": None,
+                    "tone": None,
+                    "score": None,
+                    "judge_consensus": None,
+                    "error": "No judge result available"
+                }
+            
+            summary.append(entry)
 
+        # Save summary
         utils.save_conversation_log(summary, f"summary_{run_no}.json")
         self.logger.log_event("system_end", run_no=run_no)
 
@@ -316,8 +442,17 @@ class IntegratedSystem:
         print(f"RUN #{run_no} COMPLETE!")
         print(f"{'='*80}")
         print(f"Total conversations: {len(summary)}")
-        print(f"Average score: {sum(e['score'] for e in summary) / len(summary) if summary else 0:.2f}")
-        print(f"Successful conversations: {sum(1 for e in summary if e['success'])}")
+        
+        # Calculate average score for successfully judged conversations
+        scored_entries = [e for e in summary if e['score'] is not None]
+        if scored_entries:
+            avg_score = sum(e['score'] for e in scored_entries) / len(scored_entries)
+            print(f"Average score: {avg_score:.2f} (from {len(scored_entries)} judged conversations)")
+        else:
+            print(f"No scored conversations available")
+            
+        successful_count = sum(1 for e in summary if e['success'] is True)
+        print(f"Successful conversations: {successful_count}")
         print(f"Summary saved to: logs/summary_{run_no}.json")
         print(f"{'='*80}")
 
@@ -366,6 +501,25 @@ class IntegratedSystem:
         variance = sum((x - mean) ** 2 for x in scores) / len(scores)
         return variance
 
+    def _parse_schedule(self, total: int) -> List[int]:
+        """Parse the self-improvement schedule."""
+        sched = getattr(config, 'SELF_IMPROVE_AFTER', 0)
+        points: List[int] = []
+        if isinstance(sched, int):
+            if sched > 0:
+                points = list(range(sched, total + 1, sched))
+        elif isinstance(sched, str):
+            try:
+                points = [int(x) for x in sched.split(";") if x.strip()]
+            except ValueError:
+                points = []
+        else:
+            try:
+                points = [int(x) for x in sched]
+            except Exception:
+                points = []
+        return sorted({p for p in points if p <= total})
+
     def _print_judge_performance(self) -> None:
         """Print performance summary for all judges."""
         print("\n" + "="*60)
@@ -406,3 +560,22 @@ class IntegratedSystem:
         for judge in self.judges:
             if judge.judge_id in human_scores:
                 judge.add_human_feedback(conversation_id, human_scores[judge.judge_id])
+    
+    def shutdown(self):
+        """Cleanup resources."""
+        print("[SYSTEM] Shutting down parallel judging system...")
+        
+        # Signal shutdown
+        self._shutdown = True
+        
+        # Signal judgment processor to stop
+        self.judgment_queue.put(None)
+        
+        # Shutdown thread pool
+        self.judge_executor.shutdown(wait=True)
+        
+        # Wait for processor thread
+        if self.judgment_processor.is_alive():
+            self.judgment_processor.join(timeout=5)
+            
+        print("[SYSTEM] Shutdown complete")
