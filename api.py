@@ -331,13 +331,24 @@ def get_status():
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
-    user_row = get_user_by_username(data.get("username", ""))
-    if user_row and check_password_hash(
-        user_row["password_hash"], data.get("password", "")
-    ):
-        user = User(user_row["id"], user_row["username"], user_row["password_hash"])
-        login_user(user)
-        return jsonify({"status": "success"})
+    username = data.get("username", "")
+    password = data.get("password", "")
+    
+    print(f"Login attempt - Username: {username}")
+    
+    user_row = get_user_by_username(username)
+    if user_row:
+        print(f"User found: {user_row['username']}")
+        password_valid = check_password_hash(user_row["password_hash"], password)
+        print(f"Password valid: {password_valid}")
+        
+        if password_valid:
+            user = User(user_row["id"], user_row["username"], user_row["password_hash"])
+            login_user(user)
+            return jsonify({"status": "success"})
+    else:
+        print(f"User not found: {username}")
+    
     return jsonify({"error": "Invalid credentials"}), 401
 
 
@@ -909,6 +920,30 @@ def debug_page():
 </body>
 </html>'''
     return debug_html
+
+
+@app.route("/api/debug/users")
+def debug_users():
+    """Debug route to check users - REMOVE IN PRODUCTION"""
+    try:
+        with get_db_connection() as conn:
+            cur = conn.execute("SELECT id, username FROM users")
+            users = [{"id": row["id"], "username": row["username"]} for row in cur.fetchall()]
+        
+        db_exists = os.path.exists(config.USER_DB_PATH)
+        
+        return jsonify({
+            "database_exists": db_exists,
+            "database_path": config.USER_DB_PATH,
+            "users": users,
+            "user_count": len(users)
+        })
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "database_exists": os.path.exists(config.USER_DB_PATH),
+            "database_path": config.USER_DB_PATH
+        })
 
 
 # Serve frontend static files
