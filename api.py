@@ -34,7 +34,7 @@ import utils
 from integrated_system import IntegratedSystem
 from token_tracker import token_tracker
 
-app = Flask(__name__, static_folder='frontend/dist', static_url_path='')
+app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
 CORS(app)
 
@@ -817,14 +817,39 @@ def search_logs():
 
 
 # Serve frontend static files
-@app.route("/", defaults={"path": ""})
+@app.route("/")
+def serve_frontend():
+    """Serve the main index.html"""
+    frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+    if os.path.exists(os.path.join(frontend_dir, "index.html")):
+        return send_from_directory(frontend_dir, "index.html")
+    else:
+        return jsonify({"error": "Frontend not built. Run 'cd frontend && npm install && npm run build'"}), 404
+
 @app.route("/<path:path>")
 def serve_static(path):
-    """Serve the React app."""
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, "index.html")
+    """Serve static files from the React build"""
+    frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+    
+    # Security check - prevent directory traversal
+    if ".." in path:
+        return "Not Found", 404
+    
+    # Check if it's an API route first
+    if path.startswith("api/"):
+        return "Not Found", 404
+    
+    # Try to serve the file
+    file_path = os.path.join(frontend_dir, path)
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return send_from_directory(frontend_dir, path)
+    
+    # For React Router - return index.html for any non-existent paths
+    index_path = os.path.join(frontend_dir, "index.html")
+    if os.path.exists(index_path):
+        return send_from_directory(frontend_dir, "index.html")
+    
+    return "Not Found", 404
 
 
 # WebSocket events
