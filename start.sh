@@ -1,15 +1,39 @@
 #!/bin/bash
+# start.sh - Start script with debugging
 
-# Ensure logs directory exists
-mkdir -p logs
+echo "=== STARTUP DEBUG INFO ==="
+echo "Current directory: $(pwd)"
+echo "Directory contents:"
+ls -la
 
-# Ensure templates directory exists
-mkdir -p templates
+echo -e "\nChecking frontend/dist:"
+if [ -d "frontend/dist" ]; then
+    echo "frontend/dist exists!"
+    echo "Contents:"
+    ls -la frontend/dist/
+else
+    echo "ERROR: frontend/dist does not exist!"
+fi
 
-# Initialize the database with admin user
-echo "Initializing database..."
-python -c "from api import init_user_db; init_user_db()"
+echo -e "\nChecking templates:"
+if [ -d "templates" ]; then
+    echo "templates directory exists!"
+    echo "Contents:"
+    ls -la templates/
+else
+    echo "WARNING: templates directory does not exist!"
+fi
 
-# Start the application with gunicorn
-echo "Starting application..."
-gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT api:app
+echo -e "\nPython path:"
+which python
+
+echo -e "\nPython version:"
+python --version
+
+echo -e "\nInstalled packages:"
+pip list | grep -E "(flask|gunicorn|eventlet)"
+
+echo -e "\n=== STARTING APPLICATION ==="
+
+# Start the application
+exec gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT api:app
