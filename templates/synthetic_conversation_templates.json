@@ -1,0 +1,96 @@
+{
+  "conversation_templates": {
+    "good_conversation": {
+      "opening": {
+        "participant": "Hi, I'm {name}. I've been dealing with {scenario} and I'm interested in your research.",
+        "wizard": "Thank you for participating, {name}. I'd like to understand your experience better. Can you tell me more about how {scenario_context} has affected your daily communication?"
+      },
+      "middle_exchanges": [
+        {
+          "participant": "Well, it's been challenging especially in {situation_type}. I often feel {emotional_impact}.",
+          "wizard": "That sounds really difficult. When you mention {situation_type}, what specific environments or types of conversations are most challenging for you? This will help us understand {research_topic} better."
+        },
+        {
+          "participant": "{specific_challenge_description}",
+          "wizard": "Those are really important insights. {validation_statement} Can you help me understand {follow_up_question}?"
+        }
+      ],
+      "closing": {
+        "wizard": "Based on our conversation, I'm developing a research plan that focuses on {identified_themes}. Here's what I'm proposing: {research_plan_json}",
+        "participant": "That sounds comprehensive and really captures what I've been experiencing."
+      }
+    },
+    "poor_conversation": {
+      "opening": {
+        "participant": "Hi, I'm {name}. I have {scenario}.",
+        "wizard": "OK. Tell me about hearing loss."
+      },
+      "middle_exchanges": [
+        {
+          "participant": "{brief_response}",
+          "wizard": "What else?"
+        },
+        {
+          "participant": "I don't know what else to say.",
+          "wizard": "Anything more?"
+        }
+      ],
+      "closing": {
+        "wizard": "Here's a research plan: {inadequate_plan}",
+        "participant": "Um, okay."
+      }
+    }
+  },
+  
+  "response_patterns": {
+    "situation_types": [
+      "social situations", "work meetings", "family gatherings", "restaurants", 
+      "group conversations", "phone calls", "public spaces", "medical appointments"
+    ],
+    "emotional_impacts": [
+      "left out of conversations", "frustrated and isolated", "embarrassed to ask for repetition",
+      "anxious in group settings", "disconnected from others", "self-conscious about my hearing"
+    ],
+    "specific_challenges": [
+      "Restaurants are the worst - all the background noise. And group conversations where people talk over each other.",
+      "Phone calls are really difficult, especially when there's static or the connection is poor.",
+      "At work, I miss important details in meetings and feel like I'm always catching up.",
+      "Family dinners are frustrating because everyone talks at once and I can't follow the conversation."
+    ],
+    "validation_statements": [
+      "I can see how that would be really challenging.",
+      "Thank you for sharing that - it helps me understand the real impact.",
+      "That's a common experience, and it's important that we capture this in our research.",
+      "Your perspective is really valuable for understanding these barriers."
+    ],
+    "follow_up_questions": [
+      "what strategies you've tried to manage these situations?",
+      "how this has affected your relationships?",
+      "what kind of support would be most helpful?",
+      "what barriers you've encountered in seeking help?"
+    ],
+    "brief_responses": [
+      "It's hard sometimes.", "I don't know.", "Maybe.", "Sure.", "I guess."
+    ]
+  },
+  
+  "research_plan_templates": {
+    "comprehensive_plan": {
+      "research_questions": [
+        "How do environmental factors affect communication for people with hearing loss?",
+        "What are the primary barriers to social participation?",
+        "What support systems are most effective?"
+      ],
+      "priority_topics": [
+        "environmental_barriers", "social_participation", "support_systems", "communication_strategies"
+      ],
+      "methodology": "qualitative_interviews",
+      "target_population": "adults_with_hearing_loss",
+      "timeline": "6_months"
+    },
+    "inadequate_plan": {
+      "topics": ["hearing loss"],
+      "questions": ["How is hearing loss?"]
+    }
+  }
+}
