@@ -48,6 +48,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 # Base directory of this file. Allows locating frontend assets reliably
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 
