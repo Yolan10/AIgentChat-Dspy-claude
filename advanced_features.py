@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, List
 import random
 
@@ -56,10 +57,10 @@ class PopulationGenerator:
             )
             print(f"[DEBUG] ChatOpenAI created successfully")
             
-            # Create messages
+            # Create messages with clearer instructions
             messages = [
                 SystemMessage(content=prompt),
-                HumanMessage(content="Provide the JSON array only."),
+                HumanMessage(content="Please provide exactly the JSON array with all persona objects. Each persona must include: name, personality, age, occupation, initial_goals, and memory_summary fields."),
             ]
             print(f"[DEBUG] Created {len(messages)} messages")
             
@@ -67,129 +68,194 @@ class PopulationGenerator:
             print(f"[DEBUG] Making LLM call...")
             response = llm.invoke(messages).content
             print(f"[DEBUG] LLM response received, length: {len(response)} chars")
-            print(f"[DEBUG] First 300 chars of response: {response[:300]}...")
+            print(f"[DEBUG] Full response:\n{response}\n")
             
-            # Parse JSON
-            print(f"[DEBUG] Attempting to parse JSON...")
-            try:
-                personas = json.loads(response)
-                print(f"[DEBUG] JSON parsed successfully, type: {type(personas)}, length: {len(personas) if isinstance(personas, (list, dict)) else 'N/A'}")
-            except json.JSONDecodeError as e:
-                print(f"[DEBUG] JSON parsing failed: {e}")
-                print(f"[DEBUG] Attempting fallback extraction...")
-                personas = utils.extract_json_array(response)
-                if personas is None:
-                    print(f"[DEBUG] Fallback extraction also failed")
-                    raise
-                else:
-                    print(f"[DEBUG] Fallback extraction succeeded, type: {type(personas)}, length: {len(personas)}")
-
-            # Process personas
+            # Parse JSON with multiple strategies
+            personas = self._parse_json_response(response)
+            
+            if not personas:
+                print(f"[DEBUG] All parsing strategies failed, using fallback")
+                return self._fallback_personas(n)
+            
+            # Process and validate personas
             result: List[Dict[str, Any]] = []
             print(f"[DEBUG] Processing {len(personas)} personas...")
             
             for i, spec in enumerate(personas):
                 print(f"[DEBUG] Processing persona {i+1}: type={type(spec)}")
                 
-                if isinstance(spec, str):
-                    print(f"[DEBUG] Persona {i+1} is string, attempting JSON parse...")
-                    try:
-                        spec = json.loads(spec)
-                        print(f"[DEBUG] String parsed to: {type(spec)}")
-                    except json.JSONDecodeError as e:
-                        print(f"[DEBUG] Failed to parse string as JSON: {e}")
-                        print(f"[DEBUG] String content: {spec[:100]}...")
-                        continue
-                        
-                if isinstance(spec, dict):
-                    print(f"[DEBUG] Adding persona {i+1} to result (keys: {list(spec.keys())})")
+                if isinstance(spec, dict) and self._is_valid_persona(spec):
+                    print(f"[DEBUG] Adding valid persona {i+1}: {spec.get('name', 'Unknown')}")
                     result.append(spec)
                 else:
-                    print(f"[DEBUG] Skipping persona {i+1} - not a dict (type: {type(spec)})")
+                    print(f"[DEBUG] Invalid persona {i+1}, skipping")
 
+            if not result:
+                print(f"[DEBUG] No valid personas found, using fallback")
+                return self._fallback_personas(n)
+                
             print(f"[DEBUG] Final result: {len(result)} personas")
             return result
             
         except (OpenAIError, RequestException, json.JSONDecodeError) as exc:
             print(f"[ERROR] Population generation failed: {exc}. Using random fallback.")
             print(f"[ERROR] Exception type: {type(exc)}")
-            fallback_result = self._fallback_personas(n)
-            print(f"[DEBUG] Fallback generated {len(fallback_result)} personas")
-            return fallback_result
+            return self._fallback_personas(n)
         except Exception as exc:
             print(f"[ERROR] Unexpected error in population generation: {exc}")
             print(f"[ERROR] Exception type: {type(exc)}")
             import traceback
             traceback.print_exc()
-            fallback_result = self._fallback_personas(n)
-            print(f"[DEBUG] Fallback generated {len(fallback_result)} personas")
-            return fallback_result
+            return self._fallback_personas(n)
+
+    def _parse_json_response(self, response: str) -> List[Dict[str, Any]]:
+        """Try multiple strategies to parse JSON from LLM response."""
+        # Strategy 1: Direct JSON parsing
+        try:
+            print(f"[DEBUG] Strategy 1: Direct JSON parsing...")
+            personas = json.loads(response)
+            if isinstance(personas, list):
+                print(f"[DEBUG] Strategy 1 succeeded: found {len(personas)} items")
+                return personas
+        except json.JSONDecodeError as e:
+            print(f"[DEBUG] Strategy 1 failed: {e}")
+        
+        # Strategy 2: Extract JSON array using regex
+        print(f"[DEBUG] Strategy 2: Regex extraction...")
+        json_match = re.search(r'\[\s*\{.*?\}\s*\]', response, re.DOTALL)
+        if json_match:
+            try:
+                json_str = json_match.group(0)
+                personas = json.loads(json_str)
+                print(f"[DEBUG] Strategy 2 succeeded: found {len(personas)} items")
+                return personas
+            except json.JSONDecodeError as e:
+                print(f"[DEBUG] Strategy 2 failed: {e}")
+        
+        # Strategy 3: Find JSON between ```json markers
+        print(f"[DEBUG] Strategy 3: Extract from code blocks...")
+        code_block_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
+        if code_block_match:
+            try:
+                json_str = code_block_match.group(1)
+                personas = json.loads(json_str)
+                print(f"[DEBUG] Strategy 3 succeeded: found {len(personas)} items")
+                return personas
+            except json.JSONDecodeError as e:
+                print(f"[DEBUG] Strategy 3 failed: {e}")
+        
+        # Strategy 4: Use utils.extract_json_array
+        print(f"[DEBUG] Strategy 4: Using utils.extract_json_array...")
+        personas = utils.extract_json_array(response)
+        if personas:
+            print(f"[DEBUG] Strategy 4 succeeded: found {len(personas)} items")
+            return personas
+        
+        # Strategy 5: Clean common JSON issues and retry
+        print(f"[DEBUG] Strategy 5: Cleaning and retrying...")
+        cleaned = response.strip()
+        # Remove any text before the first [
+        start_idx = cleaned.find('[')
+        if start_idx > 0:
+            cleaned = cleaned[start_idx:]
+        # Remove any text after the last ]
+        end_idx = cleaned.rfind(']')
+        if end_idx > 0 and end_idx < len(cleaned) - 1:
+            cleaned = cleaned[:end_idx + 1]
+        
+        try:
+            personas = json.loads(cleaned)
+            if isinstance(personas, list):
+                print(f"[DEBUG] Strategy 5 succeeded: found {len(personas)} items")
+                return personas
+        except json.JSONDecodeError as e:
+            print(f"[DEBUG] Strategy 5 failed: {e}")
+        
+        print(f"[DEBUG] All parsing strategies failed")
+        return []
+
+    def _is_valid_persona(self, spec: Dict[str, Any]) -> bool:
+        """Check if a persona specification has all required fields."""
+        required_fields = ["name", "personality", "age", "occupation", "initial_goals", "memory_summary"]
+        for field in required_fields:
+            if field not in spec:
+                print(f"[DEBUG] Missing required field: {field}")
+                return False
+        return True
 
     def _fallback_personas(self, n: int) -> List[Dict[str, Any]]:
         """Return a simple offline population when the LLM call fails."""
         print(f"[DEBUG] Generating {n} fallback personas...")
         
         names = [
-            "Alice",
-            "Bob",
-            "Carol",
-            "Dave",
-            "Eve",
-            "Frank",
-            "Grace",
-            "Heidi",
-            "Ivan",
-            "Judy",
-            "Mallory",
-            "Niaj",
-            "Olivia",
-            "Peggy",
-            "Rupert",
-            "Sybil",
-            "Trent",
-            "Victor",
-            "Wendy",
-            "Yvonne",
+            "Emma Carter", "Michael Thompson", "Sarah Williams", "David Johnson",
+            "Linda Martinez", "Robert Davis", "Patricia Brown", "James Wilson",
+            "Jennifer Garcia", "William Anderson", "Margaret Taylor", "Thomas White",
+            "Dorothy Harris", "Charles Martin", "Helen Clark", "George Lewis",
+            "Betty Walker", "Frank Hall", "Ruth Young", "Edward King"
         ]
+        
         occupations = [
-            "teacher",
-            "engineer",
-            "artist",
-            "doctor",
-            "writer",
+            "teacher", "engineer", "nurse", "accountant", "retail manager",
+            "social worker", "construction worker", "administrative assistant",
+            "sales representative", "customer service agent"
         ]
+        
         goals = [
-            "improve communication",
-            "find better hearing aids",
-            "learn sign language",
-            "connect with community",
-            "share experiences",
+            "improve communication in noisy environments",
+            "find better hearing aids within budget",
+            "learn coping strategies for social situations",
+            "connect with others who have hearing loss",
+            "understand new hearing aid technologies"
         ]
-        personalities = [
-            "O:0.6 C:0.7 E:0.5 A:0.6 N:0.4",
-            "O:0.8 C:0.5 E:0.7 A:0.7 N:0.3",
-            "O:0.4 C:0.6 E:0.6 A:0.5 N:0.5",
+        
+        memory_summaries = [
+            "struggled with hearing loss for 5 years, recently got hearing aids",
+            "born with partial hearing loss, uses sign language occasionally",
+            "developed hearing loss due to workplace noise exposure",
+            "age-related hearing loss, hesitant about hearing aids",
+            "sudden hearing loss after illness, adjusting to new reality"
         ]
-        memory = [
-            "struggled with hearing in crowds",
-            "recently started using aids",
-            "has family history of hearing loss",
-        ]
+        
         result = []
+        used_names = set()
+        
         for i in range(n):
-            name = random.choice(names)
-            age = random.randint(25, 70)
-            occ = random.choice(occupations)
+            # Ensure unique names
+            available_names = [name for name in names if name not in used_names]
+            if not available_names:
+                available_names = names  # Reset if we run out
+                used_names.clear()
+            
+            name = random.choice(available_names)
+            used_names.add(name)
+            
+            age = random.randint(25, 75)
+            
+            # Generate personality scores
+            personality = {
+                "openness": round(random.uniform(0.3, 0.9), 1),
+                "conscientiousness": round(random.uniform(0.3, 0.9), 1),
+                "extraversion": round(random.uniform(0.2, 0.8), 1),
+                "agreeableness": round(random.uniform(0.4, 0.9), 1),
+                "neuroticism": round(random.uniform(0.2, 0.7), 1)
+            }
+            
+            # Format personality as OCEAN string
+            personality_str = f"O:{personality['openness']} C:{personality['conscientiousness']} E:{personality['extraversion']} A:{personality['agreeableness']} N:{personality['neuroticism']}"
+            
             persona = {
                 "name": name,
-                "personality": random.choice(personalities),
+                "personality": personality_str,
                 "age": age,
-                "occupation": occ,
+                "occupation": random.choice(occupations),
                 "initial_goals": random.choice(goals),
-                "memory_summary": random.choice(memory),
+                "memory_summary": random.choice(memory_summaries)
             }
-            print(f"[DEBUG] Fallback persona {i+1}: {name}, {age}, {occ}")
+            
+            print(f"[DEBUG] Fallback persona {i+1}: {persona['name']}, {persona['age']}, {persona['occupation']}")
             result.append(persona)
+        
         return result
 
 
