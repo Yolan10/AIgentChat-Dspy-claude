@@ -827,10 +827,20 @@ def search_logs():
 def serve_frontend():
     """Serve the built frontend if available, otherwise fall back to the source files."""
     dist_dir = os.path.join("frontend", "dist")
-    if os.path.exists(os.path.join(dist_dir, "index.html")):
+    dist_index = os.path.join(dist_dir, "index.html")
+    if os.path.exists(dist_index):
         return send_from_directory(dist_dir, "index.html")
     # If the frontend hasn't been built, serve the unbundled source version
-    return send_from_directory("frontend", "index.html")
+    fallback_index = os.path.join("frontend", "index.html")
+    if os.path.exists(fallback_index):
+        return send_from_directory("frontend", "index.html")
+    # In development environments a missing index file would cause a 404.
+    # Display a simple message to aid debugging instead of failing silently.
+    return (
+        "<h1>Frontend not found.\n" "Ensure the React app is built.</h1>",
+        200,
+        {"Content-Type": "text/html"},
+    )
 
 
 @app.route("/<path:path>")
