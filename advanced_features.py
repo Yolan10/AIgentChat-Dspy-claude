@@ -1,4 +1,4 @@
-"""Collection of placeholder classes implementing advanced behaviours."""
+"""Collection of placeholder classes implementing advanced behaviours with improved debugging."""
 from __future__ import annotations
 
 import json
@@ -26,54 +26,109 @@ import utils
 
 
 class PopulationGenerator:
-    """DSPy-powered population generation."""
+    """DSPy-powered population generation with improved error handling and debugging."""
 
     def generate(self, market_context: str, n: int) -> List[Dict[str, Any]]:
         """Return a list of persona specifications."""
+        
+        print(f"[DEBUG] PopulationGenerator.generate() called with:")
+        print(f"  - market_context: '{market_context}'")
+        print(f"  - n: {n}")
 
-        template = utils.load_template(config.POPULATION_INSTRUCTION_TEMPLATE_PATH)
-        prompt = utils.render_template(template, {"instruction": market_context, "n": n})
-
-        llm = ChatOpenAI(
-            model=config.LLM_MODEL,
-            temperature=config.LLM_TEMPERATURE,
-            max_tokens=config.LLM_MAX_TOKENS,
-            max_retries=config.OPENAI_MAX_RETRIES,
-        )
-        messages = [
-            SystemMessage(content=prompt),
-            HumanMessage(content="Provide the JSON array only."),
-        ]
         try:
+            # Load template
+            print(f"[DEBUG] Loading template from: {config.POPULATION_INSTRUCTION_TEMPLATE_PATH}")
+            template = utils.load_template(config.POPULATION_INSTRUCTION_TEMPLATE_PATH)
+            print(f"[DEBUG] Template loaded successfully, length: {len(template)} chars")
+            
+            # Render template
+            prompt = utils.render_template(template, {"instruction": market_context, "n": n})
+            print(f"[DEBUG] Rendered prompt length: {len(prompt)} chars")
+            print(f"[DEBUG] First 200 chars of prompt: {prompt[:200]}...")
+
+            # Create LLM
+            print(f"[DEBUG] Creating ChatOpenAI with model: {config.LLM_MODEL}")
+            llm = ChatOpenAI(
+                model=config.LLM_MODEL,
+                temperature=config.LLM_TEMPERATURE,
+                max_tokens=config.LLM_MAX_TOKENS,
+                max_retries=config.OPENAI_MAX_RETRIES,
+            )
+            print(f"[DEBUG] ChatOpenAI created successfully")
+            
+            # Create messages
+            messages = [
+                SystemMessage(content=prompt),
+                HumanMessage(content="Provide the JSON array only."),
+            ]
+            print(f"[DEBUG] Created {len(messages)} messages")
+            
+            # Make LLM call
+            print(f"[DEBUG] Making LLM call...")
             response = llm.invoke(messages).content
+            print(f"[DEBUG] LLM response received, length: {len(response)} chars")
+            print(f"[DEBUG] First 300 chars of response: {response[:300]}...")
+            
+            # Parse JSON
+            print(f"[DEBUG] Attempting to parse JSON...")
             try:
                 personas = json.loads(response)
-            except json.JSONDecodeError:
+                print(f"[DEBUG] JSON parsed successfully, type: {type(personas)}, length: {len(personas) if isinstance(personas, (list, dict)) else 'N/A'}")
+            except json.JSONDecodeError as e:
+                print(f"[DEBUG] JSON parsing failed: {e}")
+                print(f"[DEBUG] Attempting fallback extraction...")
                 personas = utils.extract_json_array(response)
                 if personas is None:
+                    print(f"[DEBUG] Fallback extraction also failed")
                     raise
+                else:
+                    print(f"[DEBUG] Fallback extraction succeeded, type: {type(personas)}, length: {len(personas)}")
+
+            # Process personas
             result: List[Dict[str, Any]] = []
-            for spec in personas:
+            print(f"[DEBUG] Processing {len(personas)} personas...")
+            
+            for i, spec in enumerate(personas):
+                print(f"[DEBUG] Processing persona {i+1}: type={type(spec)}")
+                
                 if isinstance(spec, str):
+                    print(f"[DEBUG] Persona {i+1} is string, attempting JSON parse...")
                     try:
                         spec = json.loads(spec)
-                    except json.JSONDecodeError:
+                        print(f"[DEBUG] String parsed to: {type(spec)}")
+                    except json.JSONDecodeError as e:
+                        print(f"[DEBUG] Failed to parse string as JSON: {e}")
+                        print(f"[DEBUG] String content: {spec[:100]}...")
                         continue
+                        
                 if isinstance(spec, dict):
+                    print(f"[DEBUG] Adding persona {i+1} to result (keys: {list(spec.keys())})")
                     result.append(spec)
+                else:
+                    print(f"[DEBUG] Skipping persona {i+1} - not a dict (type: {type(spec)})")
+
+            print(f"[DEBUG] Final result: {len(result)} personas")
             return result
-        except (
-            OpenAIError,
-            RequestException,
-            json.JSONDecodeError,
-        ) as exc:  # pragma: no cover - network failure fallback
-            print(
-                f"Population generation failed: {exc}. Using random fallback."
-            )
-            return self._fallback_personas(n)
+            
+        except (OpenAIError, RequestException, json.JSONDecodeError) as exc:
+            print(f"[ERROR] Population generation failed: {exc}. Using random fallback.")
+            print(f"[ERROR] Exception type: {type(exc)}")
+            fallback_result = self._fallback_personas(n)
+            print(f"[DEBUG] Fallback generated {len(fallback_result)} personas")
+            return fallback_result
+        except Exception as exc:
+            print(f"[ERROR] Unexpected error in population generation: {exc}")
+            print(f"[ERROR] Exception type: {type(exc)}")
+            import traceback
+            traceback.print_exc()
+            fallback_result = self._fallback_personas(n)
+            print(f"[DEBUG] Fallback generated {len(fallback_result)} personas")
+            return fallback_result
 
     def _fallback_personas(self, n: int) -> List[Dict[str, Any]]:
         """Return a simple offline population when the LLM call fails."""
+        print(f"[DEBUG] Generating {n} fallback personas...")
+        
         names = [
             "Alice",
             "Bob",
@@ -121,20 +176,20 @@ class PopulationGenerator:
             "has family history of hearing loss",
         ]
         result = []
-        for _ in range(n):
+        for i in range(n):
             name = random.choice(names)
             age = random.randint(25, 70)
             occ = random.choice(occupations)
-            result.append(
-                {
-                    "name": name,
-                    "personality": random.choice(personalities),
-                    "age": age,
-                    "occupation": occ,
-                    "initial_goals": random.choice(goals),
-                    "memory_summary": random.choice(memory),
-                }
-            )
+            persona = {
+                "name": name,
+                "personality": random.choice(personalities),
+                "age": age,
+                "occupation": occ,
+                "initial_goals": random.choice(goals),
+                "memory_summary": random.choice(memory),
+            }
+            print(f"[DEBUG] Fallback persona {i+1}: {name}, {age}, {occ}")
+            result.append(persona)
         return result
 
 
