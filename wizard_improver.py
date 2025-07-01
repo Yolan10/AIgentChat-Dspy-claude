@@ -82,19 +82,34 @@ if dspy is not None:
         """Convert conversation history into a DSPy dataset."""
         dataset = []
         for log in history:
+            # Only use conversations that have judge feedback
+            if 'judge_result' not in log:
+                continue
+                
             transcript = "\n".join(f"{t['speaker']}: {t['text']}" for t in log.get('turns', []))
             judge = log.get("judge_result", {})
             score = judge.get("overall", judge.get("score", 0))
+            
+            # Include judge feedback in the logs for improvement
+            judge_feedback = f"\n\nJUDGE EVALUATION:\n"
+            judge_feedback += f"- Goal Completion: {judge.get('goal_completion', 0):.2f}\n"
+            judge_feedback += f"- Coherence: {judge.get('coherence', 0):.2f}\n"
+            judge_feedback += f"- Tone: {judge.get('tone', 0):.2f}\n"
+            judge_feedback += f"- Overall Score: {score:.2f}\n"
+            judge_feedback += f"- Success: {judge.get('success', False)}\n"
+            judge_feedback += f"- Rationale: {judge.get('rationale', 'No rationale provided')}"
+            
             ex = (
                 dspy.Example(
                     instruction=log.get("prompt", ""),
-                    logs=f"{transcript}\nRESULT: {judge}",
+                    logs=f"{transcript}{judge_feedback}",
                     goal=log.get("goal"),
                     score=score,
                 )
                 .with_inputs("instruction", "logs", "goal")
             )
             dataset.append(ex)
+            
         return dataset
 
 
@@ -122,8 +137,18 @@ if dspy is not None:
             """
 
             base = example.score or 0
-            bonus = 1.0 if "buy" in pred.improved_prompt.lower() else 0.0
-            return base + bonus
+            
+            # Bonus for including key research planning elements
+            research_keywords = [
+                "research", "plan", "questions", "interview", "hearing loss",
+                "COM-B", "TDF", "theoretical", "framework", "topic"
+            ]
+            keyword_bonus = sum(0.05 for keyword in research_keywords if keyword.lower() in pred.improved_prompt.lower())
+            
+            # Cap the bonus
+            keyword_bonus = min(keyword_bonus, 0.3)
+            
+            return base + keyword_bonus
 
         improver_module = WizardImprover()
         if len(dataset) >= config.DSPY_MIPRO_MINIBATCH_SIZE:
