@@ -820,21 +820,92 @@ def search_logs():
 @app.route("/debug")
 def debug_page():
     """Serve a simple debug page"""
+    import subprocess
+    
+    # Check Node and npm
+    try:
+        node_version = subprocess.check_output(['node', '--version'], text=True).strip()
+    except:
+        node_version = "Not found"
+    
+    try:
+        npm_version = subprocess.check_output(['npm', '--version'], text=True).strip()
+    except:
+        npm_version = "Not found"
+    
+    # List directories
+    root_files = os.listdir('.')
+    frontend_exists = os.path.exists('frontend')
+    frontend_files = os.listdir('frontend') if frontend_exists else []
+    
     debug_html = '''<!DOCTYPE html>
 <html>
-<head><title>AIgentChat Debug</title></head>
+<head>
+    <title>AIgentChat Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    </style>
+</head>
 <body>
 <h1>AIgentChat Debug Info</h1>
-<p>Flask is running correctly!</p>
-<p>Current working directory: ''' + os.getcwd() + '''</p>
-<p>Frontend dist exists: ''' + str(os.path.exists("frontend/dist")) + '''</p>
-<p>Frontend dist contents: ''' + str(os.listdir("frontend/dist") if os.path.exists("frontend/dist") else "Directory not found") + '''</p>
+<p class="success">✓ Flask is running correctly!</p>
+
+<h2>Environment Info</h2>
+<table>
+<tr><th>Item</th><th>Value</th></tr>
+<tr><td>Current working directory</td><td>''' + os.getcwd() + '''</td></tr>
+<tr><td>Node version</td><td class="''' + ('success' if node_version != 'Not found' else 'error') + '''">''' + node_version + '''</td></tr>
+<tr><td>NPM version</td><td class="''' + ('success' if npm_version != 'Not found' else 'error') + '''">''' + npm_version + '''</td></tr>
+<tr><td>Python version</td><td>''' + sys.version + '''</td></tr>
+</table>
+
+<h2>Directory Structure</h2>
+<h3>Root Directory Files:</h3>
+<pre>''' + '\\n'.join(root_files) + '''</pre>
+
+<h3>Frontend Directory:</h3>
+<p>Frontend directory exists: <span class="''' + ('success' if frontend_exists else 'error') + '''">''' + str(frontend_exists) + '''</span></p>
+''' + ('<pre>' + '\\n'.join(frontend_files) + '</pre>' if frontend_exists else '') + '''
+
+<h3>Frontend Build Status:</h3>
+<p>Frontend dist exists: <span class="''' + ('success' if os.path.exists('frontend/dist') else 'error') + '''">''' + str(os.path.exists("frontend/dist")) + '''</span></p>
+<p>Frontend dist contents: <pre>''' + str(os.listdir("frontend/dist") if os.path.exists("frontend/dist") else "Directory not found") + '''</pre></p>
+
+<h2>Quick Fix Instructions</h2>
+<div style="background: #ffffcc; padding: 15px; border: 1px solid #cccc00;">
+<p><strong>To fix the frontend build issue on Render:</strong></p>
+<ol>
+<li>Go to your Render dashboard</li>
+<li>Click on your service settings</li>
+<li>Update the Build Command to:<br>
+<code>pip install -r requirements.txt && cd frontend && npm install && npm run build && cd ..</code></li>
+<li>Make sure NODE_VERSION environment variable is set to: 18.17.0</li>
+<li>Redeploy the service</li>
+</ol>
+</div>
+
 <h2>Test Links:</h2>
 <ul>
-<li><a href="/api/status">API Status</a></li>
-<li><a href="/api/check_auth">Auth Check</a></li>
-<li><a href="/">Frontend (if built)</a></li>
+<li><a href="/api/status">API Status</a> - ''' + ('✓ Working' if True else '✗ Not working') + '''</li>
+<li><a href="/api/check_auth">Auth Check</a> - ''' + ('✓ Working' if True else '✗ Not working') + '''</li>
+<li><a href="/">Frontend (if built)</a> - ''' + ('✓ Should work after build' if os.path.exists("frontend/dist") else '✗ Not built yet') + '''</li>
 </ul>
+
+<h2>What the Frontend Should Show:</h2>
+<ul>
+<li>Login page with username/password fields</li>
+<li>After login: Dashboard with simulation controls</li>
+<li>Tabs for: Configuration, Prompt Editor, Effectiveness Charts, Token Usage, Conversations, Run History</li>
+<li>Real-time updates during simulations via WebSocket</li>
+</ul>
+
+<p><small>Debug page generated at: ''' + utils.get_timestamp() + '''</small></p>
 </body>
 </html>'''
     return debug_html
