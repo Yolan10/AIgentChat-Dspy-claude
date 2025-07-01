@@ -6,7 +6,7 @@ import os
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 # Population Settings
-POPULATION_SIZE = 5  # Increased from 3 to trigger more improvements
+POPULATION_SIZE = 36  # Increased from 3 to trigger more improvements
 POPULATION_INSTRUCTION_TEMPLATE_PATH = "templates/population_instruction.txt"
 
 # Wizard Settings
@@ -15,7 +15,7 @@ WIZARD_DEFAULT_GOAL = (
     " structured research plan"
 )
 WIZARD_PROMPT_TEMPLATE_PATH = "templates/research_wizard_prompt.txt"
-MAX_TURNS = 10
+MAX_TURNS = 6
 
 # CRITICAL: Self-improvement schedule - triggers after specific conversations
 # Option 1: Every N conversations
