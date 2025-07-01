@@ -278,6 +278,12 @@ class IntegratedSystem:
             
             print(f"\n{'='*60}")
             print(f"CONVERSATION {conv_index}/{n} COMPLETE")
+            print(f"Agent: {pop.name} ({pop.agent_id})")
+            print(f"Success: {entry['success']}")
+            print(f"Overall Score: {entry['score']:.2f}")
+            print(f"Wizard Conversations Completed: {self.wizard.conversation_count}")
+            print(f"Wizard History Buffer: {len(self.wizard.history_buffer)} conversations")
+            print(f"Judged Conversations: {sum(1 for log in self.wizard.history_buffer if 'judge_result' in log)}")
             print(f"{'='*60}\n")
 
         # PHASE 2: Generate population agents and run conversations
@@ -297,12 +303,13 @@ class IntegratedSystem:
             
             agents.append((agent, idx))
 
-        # Now run all conversations
+                    # Now run all conversations
         if config.PARALLEL_CONVERSATIONS:
             print(f"\n[SYSTEM] Running {len(agents)} conversations in parallel...")
             # Run all conversations in parallel
             batch_threads = []
             for agent, idx in agents:
+                run_conversation(agent, idx)
                 t = threading.Thread(target=run_conversation, args=(agent, idx))
                 batch_threads.append(t)
                 t.start()
@@ -312,24 +319,20 @@ class IntegratedSystem:
                 t.join()
                 
             print(f"[SYSTEM] All parallel conversations completed.")
+            
+            # After all conversations, check for final improvement
+            print(f"\n[SYSTEM] Final wizard improvement check...")
+            if self.wizard._should_self_improve():
+                print(f"[SYSTEM] 🚀 TRIGGERING FINAL WIZARD IMPROVEMENT")
+                try:
+                    self.wizard.self_improve()
+                    print(f"[SYSTEM] ✅ Final wizard improvement completed")
+                except Exception as e:
+                    print(f"[SYSTEM] ❌ Final wizard improvement failed: {e}")
         else:
             print(f"\n[SYSTEM] Running {len(agents)} conversations sequentially...")
-            # Run conversations sequentially
+            # Run conversations sequentially - improvement happens after each conversation automatically
             for agent, idx in agents:
-                run_conversation(agent, idx)
-                
-                # Check if we've reached an improvement point
-                if idx == next_point:
-                    print(f"\n[SYSTEM] Reached improvement point at conversation {idx}")
-                    
-                    # Trigger wizard improvement if scheduled
-                    if self.wizard._should_self_improve():
-                        print(f"[WIZARD] Triggering self-improvement...")
-                        # Improvement will happen based on conversations completed so far
-                    
-                    # Update to next improvement point
-                    schedule_index += 1
-                    next_point = schedule[schedule_index] if schedule_index < len(schedule) else n + 1
 
         # PHASE 3: Save summary and complete
         print(f"\n{'='*60}")
