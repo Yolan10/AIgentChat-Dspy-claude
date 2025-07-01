@@ -72,6 +72,25 @@ class IntegratedSystem:
         else:
             self.judges = [self.primary_judge]
 
+    def _extract_score_value(self, score_data: Any) -> float:
+        """Extract a numeric score from various possible formats."""
+        if isinstance(score_data, (int, float)):
+            return float(score_data)
+        elif isinstance(score_data, dict):
+            # Handle CriterionScore objects
+            if 'score' in score_data:
+                return float(score_data['score'])
+            # Handle other dict formats
+            for key in ['value', 'rating', 'overall']:
+                if key in score_data:
+                    return float(score_data[key])
+        elif hasattr(score_data, 'score'):
+            # Handle objects with score attribute
+            return float(score_data.score)
+        
+        # Default fallback
+        return 0.0
+
     def run(
         self,
         instruction: str,
@@ -163,12 +182,13 @@ class IntegratedSystem:
                     print(f"  - {judge.judge_id} evaluating...")
                     result = judge.assess(log)
                     judge_results.append(result)
-                    print(f"    Score: {result.get('overall', 0):.2f}")
+                    overall_score = self._extract_score_value(result.get('overall', result.get('score', 0)))
+                    print(f"    Score: {overall_score:.2f}")
                     self.logger.log_event(
                         "individual_judge_complete",
                         judge_id=judge.judge_id,
                         agent_id=pop.agent_id,
-                        score=result.get("overall", 0)
+                        score=overall_score
                     )
                 
                 # Aggregate results
@@ -178,10 +198,10 @@ class IntegratedSystem:
                 log["judge_consensus"] = aggregated_result.get("judge_consensus", False)
                 
                 print(f"\n[JUDGE] Consensus evaluation complete:")
-                print(f"  - Overall Score: {aggregated_result.get('overall', 0):.2f}")
-                print(f"  - Goal Completion: {aggregated_result.get('goal_completion', 0):.2f}")
-                print(f"  - Coherence: {aggregated_result.get('coherence', 0):.2f}")
-                print(f"  - Tone: {aggregated_result.get('tone', 0):.2f}")
+                print(f"  - Overall Score: {self._extract_score_value(aggregated_result.get('overall', 0)):.2f}")
+                print(f"  - Goal Completion: {self._extract_score_value(aggregated_result.get('goal_completion', 0)):.2f}")
+                print(f"  - Coherence: {self._extract_score_value(aggregated_result.get('coherence', 0)):.2f}")
+                print(f"  - Tone: {self._extract_score_value(aggregated_result.get('tone', 0)):.2f}")
                 print(f"  - Success: {aggregated_result.get('success', False)}")
                 print(f"  - Judge Agreement: {aggregated_result.get('judge_consensus', False)}")
             else:
@@ -190,17 +210,17 @@ class IntegratedSystem:
                 log["judge_result"] = judge_result
                 
                 print(f"\n[JUDGE] Evaluation complete:")
-                print(f"  - Overall Score: {judge_result.get('overall', 0):.2f}")
-                print(f"  - Goal Completion: {judge_result.get('goal_completion', 0):.2f}")
-                print(f"  - Coherence: {judge_result.get('coherence', 0):.2f}")
-                print(f"  - Tone: {judge_result.get('tone', 0):.2f}")
+                print(f"  - Overall Score: {self._extract_score_value(judge_result.get('overall', judge_result.get('score', 0))):.2f}")
+                print(f"  - Goal Completion: {self._extract_score_value(judge_result.get('goal_completion', 0)):.2f}")
+                print(f"  - Coherence: {self._extract_score_value(judge_result.get('coherence', 0)):.2f}")
+                print(f"  - Tone: {self._extract_score_value(judge_result.get('tone', 0)):.2f}")
                 print(f"  - Success: {judge_result.get('success', False)}")
                 
                 self.logger.log_event(
                     "judge_complete",
                     judge_id=self.primary_judge.judge_id,
                     agent_id=pop.agent_id,
-                    score=judge_result.get("overall", 0)
+                    score=self._extract_score_value(judge_result.get("overall", judge_result.get("score", 0)))
                 )
             
             # PHASE 2C: Wizard receives feedback for learning
@@ -212,8 +232,9 @@ class IntegratedSystem:
             utils.save_conversation_log(log, filename)
             print(f"[SYSTEM] Conversation log saved: {filename}")
             
-            # Update summary
+            # Update summary - extract numeric values for storage
             spec = pop.get_spec()
+            judge_result = log["judge_result"]
             entry = {
                 "pop_agent_id": pop.agent_id,
                 "name": spec.get("name"),
@@ -225,11 +246,11 @@ class IntegratedSystem:
                 "system_instruction": spec.get("system_instruction"),
                 "temperature": spec.get("llm_settings", {}).get("temperature"),
                 "max_tokens": spec.get("llm_settings", {}).get("max_tokens"),
-                "success": log["judge_result"].get("success"),
-                "goal_completion": log["judge_result"].get("goal_completion"),
-                "coherence": log["judge_result"].get("coherence"),
-                "tone": log["judge_result"].get("tone"),
-                "score": log["judge_result"].get("overall"),
+                "success": judge_result.get("success"),
+                "goal_completion": self._extract_score_value(judge_result.get("goal_completion")),
+                "coherence": self._extract_score_value(judge_result.get("coherence")),
+                "tone": self._extract_score_value(judge_result.get("tone")),
+                "score": self._extract_score_value(judge_result.get("overall", judge_result.get("score", 0))),
                 "judge_consensus": log.get("judge_consensus", True),
             }
             
@@ -330,11 +351,11 @@ class IntegratedSystem:
         if not results:
             return {}
         
-        # Extract scores for each criterion
-        goal_scores = [r.get("goal_completion", 0) for r in results]
-        coherence_scores = [r.get("coherence", 0) for r in results]
-        tone_scores = [r.get("tone", 0) for r in results]
-        overall_scores = [r.get("overall", 0) for r in results]
+        # Extract scores for each criterion - handle both numeric and dict formats
+        goal_scores = [self._extract_score_value(r.get("goal_completion", 0)) for r in results]
+        coherence_scores = [self._extract_score_value(r.get("coherence", 0)) for r in results]
+        tone_scores = [self._extract_score_value(r.get("tone", 0)) for r in results]
+        overall_scores = [self._extract_score_value(r.get("overall", r.get("score", 0))) for r in results]
         success_votes = [r.get("success", False) for r in results]
         
         # Calculate aggregated scores (mean)
