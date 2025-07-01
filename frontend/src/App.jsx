@@ -10,7 +10,11 @@ import TokenUsage from './components/TokenUsage';
 import Login from './Login';
 import { Settings, BarChart3, MessageSquare, History, FileText, Activity, Coins } from 'lucide-react';
 
-const socket = io();
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const socket = io(API_URL, {
+  transports: ['websocket', 'polling'],
+  withCredentials: true
+});
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -25,7 +29,7 @@ function App() {
   const [systemEvents, setSystemEvents] = useState([]);
 
   useEffect(() => {
-    fetch('/api/check_auth')
+    fetch(`${API_URL}/api/check_auth')
       .then(res => res.json())
       .then(data => setAuthenticated(data.authenticated))
       .catch(() => setAuthenticated(false));
@@ -48,7 +52,7 @@ function App() {
     });
 
     // Fetch initial status
-    fetch('/api/status')
+    fetch(`${API_URL}/api/status')
       .then(res => res.json())
       .then(setSimulationState)
       .catch(console.error);
@@ -99,7 +103,7 @@ function App() {
   };
 
   const handleLogout = async () => {
-    await fetch('/api/logout', { method: 'POST' });
+    await fetch(`${API_URL}/api/logout', { method: 'POST' });
     setAuthenticated(false);
   };
 
