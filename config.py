@@ -77,12 +77,16 @@ PARALLEL_CONVERSATIONS = True  # Changed from False to True
 # generated.
 START_WHEN_SPAWNED = False
 
-# Dspy Settings
-DSPY_TRAINING_ITER = 1
+# Wizard Improvement Templates
+SYNTHETIC_SCENARIOS_TEMPLATE_PATH = "templates/synthetic_scenarios.json"
+SYNTHETIC_CONVERSATION_TEMPLATE_PATH = "templates/synthetic_conversation_templates.json"
+PERFORMANCE_ANALYSIS_TEMPLATE_PATH = "templates/performance_analysis_template.txt"
+IMPROVEMENT_PROMPTS_TEMPLATE_PATH = "templates/improvement_prompts.json"
+DSPY_TRAINING_ITER = 2  # Increased for better optimization
 DSPY_LEARNING_RATE = 0.01
-# Optimizer thresholds
-DSPY_BOOTSTRAP_MINIBATCH_SIZE = 2  # Reduced for testing
-DSPY_MIPRO_MINIBATCH_SIZE = 10  # Reduced for testing
+# Optimizer thresholds - lowered to enable MIPROv2 sooner
+DSPY_BOOTSTRAP_MINIBATCH_SIZE = 3  # Reduced for faster activation
+DSPY_MIPRO_MINIBATCH_SIZE = 5  # Reduced to use MIPROv2 with smaller datasets
 # Maximum number of conversation logs kept in memory for self improvement
 HISTORY_BUFFER_LIMIT = 50
 # Maximum conversation history stored by each population agent
