@@ -45,6 +45,10 @@ CORS(app)
 # Use the eventlet async mode to match the Gunicorn worker class
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
+# Base directory of this file. Allows locating frontend assets reliably
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 
@@ -826,14 +830,14 @@ def search_logs():
 @app.route("/")
 def serve_frontend():
     """Serve the built frontend if available, otherwise fall back to the source files."""
-    dist_dir = os.path.join("frontend", "dist")
+    dist_dir = os.path.join(BASE_DIR, "frontend", "dist")
     dist_index = os.path.join(dist_dir, "index.html")
     if os.path.exists(dist_index):
         return send_from_directory(dist_dir, "index.html")
     # If the frontend hasn't been built, serve the unbundled source version
-    fallback_index = os.path.join("frontend", "index.html")
+    fallback_index = os.path.join(BASE_DIR, "frontend", "index.html")
     if os.path.exists(fallback_index):
-        return send_from_directory("frontend", "index.html")
+        return send_from_directory(os.path.join(BASE_DIR, "frontend"), "index.html")
     # In development environments a missing index file would cause a 404.
     # Display a simple message to aid debugging instead of failing silently.
     return (
@@ -843,15 +847,14 @@ def serve_frontend():
     )
 
 
-
 @app.route("/<path:path>")
 def serve_static(path):
     """Serve static assets from the built frontend or the source directory."""
-    dist_dir = os.path.join("frontend", "dist")
+    dist_dir = os.path.join(BASE_DIR, "frontend", "dist")
     dist_path = os.path.join(dist_dir, path)
     if os.path.exists(dist_path):
         return send_from_directory(dist_dir, path)
-    return send_from_directory("frontend", path)
+    return send_from_directory(os.path.join(BASE_DIR, "frontend"), path)
 
 
 # WebSocket events
