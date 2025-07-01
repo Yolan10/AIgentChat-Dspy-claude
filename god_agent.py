@@ -35,6 +35,24 @@ class GodAgent:
         run_no: int = 0,
         start_index: int = 1,
     ) -> List[PopulationAgent]:
+        """Spawn a population of agents based on instruction text.
+        
+        Parameters
+        ----------
+        instruction_text : str
+            Instructions for generating the population
+        n : int | None
+            Number of agents to generate (uses config default if None)
+        run_no : int
+            Current run number
+        start_index : int
+            Starting index for agent numbering
+            
+        Returns
+        -------
+        List[PopulationAgent]
+            List of generated population agents
+        """
 
         n = n or config.POPULATION_SIZE
         prompt = utils.render_template(self.template, {"instruction": instruction_text, "n": n})
@@ -56,7 +74,6 @@ class GodAgent:
                     continue
             agent = PopulationAgent(
                 agent_id=utils.format_agent_id(run_no, idx),
-
                 name=spec.get("name"),
                 personality_description=spec.get("personality"),
                 age=spec.get("age"),
@@ -70,7 +87,7 @@ class GodAgent:
             # Save the agent specification immediately so users can inspect it
             log_filename = f"{agent.agent_id}_spec_{utils.get_timestamp().replace(':', '').replace('-', '')}.json"
             utils.save_conversation_log(agent.get_spec(), log_filename)
-            print(f"Created {agent.agent_id} -> {log_filename}")
+            print(f"      Spec saved: logs/{log_filename}")
 
         return population
 
@@ -101,13 +118,11 @@ class GodAgent:
             except json.JSONDecodeError:
                 raise ValueError(f"Invalid persona spec: {spec}")
 
-
         agent = PopulationAgent(
             agent_id=utils.format_agent_id(run_no, index),
             name=spec.get("name"),
             personality_description=spec.get("personality")
             or spec.get("personality_description"),
-
             age=spec.get("age"),
             occupation=spec.get("occupation"),
             initial_goals=spec.get("initial_goals"),
@@ -115,10 +130,11 @@ class GodAgent:
             llm_settings=self.llm_settings,
         )
 
+        # Save agent specification to logs
         log_filename = (
             f"{agent.agent_id}_spec_{utils.get_timestamp().replace(':', '').replace('-', '')}.json"
         )
         utils.save_conversation_log(agent.get_spec(), log_filename)
-        print(f"Created {agent.agent_id} -> {log_filename}")
+        print(f"      Spec saved: logs/{log_filename}")
 
         return agent
