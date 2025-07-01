@@ -69,6 +69,8 @@ class PopulationAgent:
         self.llm_settings = llm_settings
         self.state = "undecided"
         self.history: List[Tuple[str, str]] = []  # (speaker, text)
+        
+        # Build system instruction
         parts = [f"You are {self.name}"]
         if self.age is not None and self.occupation is not None:
             parts.append(f", a {self.age}-year-old {self.occupation}")
@@ -83,6 +85,7 @@ class PopulationAgent:
         )
         parts.append("Respond accordingly.")
         self.system_instruction = "".join(parts)
+        
         self.llm = ChatOpenAI(
             model=llm_settings.get("model", config.LLM_MODEL),
             temperature=llm_settings.get("temperature", config.LLM_TEMPERATURE),
@@ -91,22 +94,46 @@ class PopulationAgent:
         )
 
     def respond_to(self, user_message: str) -> str:
+        """Generate a response to the wizard's message.
+        
+        Parameters
+        ----------
+        user_message : str
+            The wizard's message to respond to
+            
+        Returns
+        -------
+        str
+            The population agent's response
+        """
+        # Build conversation history for LLM
         messages = [SystemMessage(content=self.system_instruction)]
+        
+        # Add conversation history
         for speaker, text in self.history:
             if speaker == "wizard":
                 messages.append(HumanMessage(content=text))
             else:
                 messages.append(AIMessage(content=text))
+        
+        # Add current wizard message
         messages.append(HumanMessage(content=user_message))
+        
+        # Generate response
         response = self.llm.invoke(messages).content
 
+        # Update history
         self.history.append(("wizard", user_message))
         self.history.append(("pop", response))
+        
+        # Trim history if it gets too long
         if len(self.history) > config.POP_HISTORY_LIMIT:
             self.history = self.history[-config.POP_HISTORY_LIMIT:]
+        
         return response
 
     def get_persona(self) -> dict:
+        """Get basic persona information."""
         return {
             "agent_id": self.agent_id,
             "name": self.name,
@@ -131,4 +158,5 @@ class PopulationAgent:
         }
 
     def reset_history(self) -> None:
+        """Clear conversation history."""
         self.history = []
