@@ -1,10 +1,11 @@
+
 services:
   - type: web
     name: aigentchat-dspy
     runtime: python
     plan: free
-    buildCommand: "./build.sh"
-    startCommand: "gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT api:app"
+    buildCommand: "chmod +x build.sh && ./build.sh"
+    startCommand: "chmod +x start.sh && ./start.sh"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
