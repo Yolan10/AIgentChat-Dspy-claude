@@ -37,7 +37,8 @@ from token_tracker import token_tracker
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="asyncio")
+# Use the eventlet async mode to match the Gunicorn worker class
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
