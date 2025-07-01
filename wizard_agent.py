@@ -197,126 +197,126 @@ class WizardAgent:
         return self.conversation_count in points
 
     def self_improve(self) -> None:
-    """Train an improver on the conversation history WITH judge feedback using enhanced MIPROv2 system."""
-    if dspy is None:
-        print(f"{self.wizard_id}: DSPy not available for improvement")
-        return
+        """Train an improver on the conversation history WITH judge feedback using enhanced MIPROv2 system."""
+        if dspy is None:
+            print(f"{self.wizard_id}: DSPy not available for improvement")
+            return
 
-    # Only use conversations that have judge feedback
-    judged_logs = [log for log in self.history_buffer if 'judge_result' in log]
-    if not judged_logs:
-        print(f"{self.wizard_id}: Cannot improve without judge feedback")
-        return
+        # Only use conversations that have judge feedback
+        judged_logs = [log for log in self.history_buffer if 'judge_result' in log]
+        if not judged_logs:
+            print(f"{self.wizard_id}: Cannot improve without judge feedback")
+            return
 
-    print(f"\n[WIZARD] Starting enhanced self-improvement with {len(judged_logs)} judged conversations...")
-    print(f"[WIZARD] Total conversations in buffer: {len(self.history_buffer)}")
-    print(f"[WIZARD] Conversations with judge results: {len(judged_logs)}")
-    
-    # Import the enhanced functions with template paths
-    from wizard_improver import build_dataset, train_improver, analyze_performance_issues
-    
-    # Analyze current performance issues using template
-    performance_issues = analyze_performance_issues(
-        judged_logs, 
-        template_path=getattr(config, 'PERFORMANCE_ANALYSIS_TEMPLATE_PATH', 'templates/performance_analysis_template.txt')
-    )
-    print(f"[WIZARD] Performance analysis:\n{performance_issues}")
-    
-    # Build enhanced dataset (may include synthetic data) using template settings
-    dataset, used_synthetic = build_dataset(
-        judged_logs, 
-        min_size=8,
-        settings_path=getattr(config, 'IMPROVEMENT_PROMPTS_TEMPLATE_PATH', 'templates/improvement_prompts.json')
-    )
-    
-    print(f"[WIZARD] Dataset composition:")
-    print(f"  - Real judged conversations: {len(judged_logs)}")
-    print(f"  - Total dataset size: {len(dataset)}")
-    print(f"  - Synthetic examples added: {len(dataset) - len(judged_logs) if used_synthetic else 0}")
-    
-    # Train the improved wizard using template settings
-    improver, metrics = train_improver(
-        dataset, 
-        self.current_prompt,
-        settings_path=getattr(config, 'IMPROVEMENT_PROMPTS_TEMPLATE_PATH', 'templates/improvement_prompts.json')
-    )
-    
-    if metrics.get("training_successful", False):
-        # Extract the improved prompt
-        improved_prompt = metrics.get("best_prompt", "")
+        print(f"\n[WIZARD] Starting enhanced self-improvement with {len(judged_logs)} judged conversations...")
+        print(f"[WIZARD] Total conversations in buffer: {len(self.history_buffer)}")
+        print(f"[WIZARD] Conversations with judge results: {len(judged_logs)}")
         
-        if improved_prompt and len(improved_prompt.strip()) > 100:
-            # Test the improved prompt with one of the examples
-            print(f"[WIZARD] Testing improved prompt...")
+        # Import the enhanced functions with template paths
+        from wizard_improver import build_dataset, train_improver, analyze_performance_issues
+        
+        # Analyze current performance issues using template
+        performance_issues = analyze_performance_issues(
+            judged_logs, 
+            template_path=getattr(config, 'PERFORMANCE_ANALYSIS_TEMPLATE_PATH', 'templates/performance_analysis_template.txt')
+        )
+        print(f"[WIZARD] Performance analysis:\n{performance_issues}")
+        
+        # Build enhanced dataset (may include synthetic data) using template settings
+        dataset, used_synthetic = build_dataset(
+            judged_logs, 
+            min_size=8,
+            settings_path=getattr(config, 'IMPROVEMENT_PROMPTS_TEMPLATE_PATH', 'templates/improvement_prompts.json')
+        )
+        
+        print(f"[WIZARD] Dataset composition:")
+        print(f"  - Real judged conversations: {len(judged_logs)}")
+        print(f"  - Total dataset size: {len(dataset)}")
+        print(f"  - Synthetic examples added: {len(dataset) - len(judged_logs) if used_synthetic else 0}")
+        
+        # Train the improved wizard using template settings
+        improver, metrics = train_improver(
+            dataset, 
+            self.current_prompt,
+            settings_path=getattr(config, 'IMPROVEMENT_PROMPTS_TEMPLATE_PATH', 'templates/improvement_prompts.json')
+        )
+        
+        if metrics.get("training_successful", False):
+            # Extract the improved prompt
+            improved_prompt = metrics.get("best_prompt", "")
             
-            try:
-                # Use the first example for testing
-                test_example = dataset[0] if dataset else None
-                if test_example:
-                    result = improver(
-                        current_prompt=self.current_prompt,
-                        conversation_examples=test_example.conversation_examples,
-                        goal=self.goal,
-                        performance_issues=performance_issues
-                    )
-                    
-                    if hasattr(result, 'improved_prompt') and result.improved_prompt:
-                        self.current_prompt = result.improved_prompt
-                        print(f"[WIZARD] Successfully applied improved prompt")
+            if improved_prompt and len(improved_prompt.strip()) > 100:
+                # Test the improved prompt with one of the examples
+                print(f"[WIZARD] Testing improved prompt...")
+                
+                try:
+                    # Use the first example for testing
+                    test_example = dataset[0] if dataset else None
+                    if test_example:
+                        result = improver(
+                            current_prompt=self.current_prompt,
+                            conversation_examples=test_example.conversation_examples,
+                            goal=self.goal,
+                            performance_issues=performance_issues
+                        )
+                        
+                        if hasattr(result, 'improved_prompt') and result.improved_prompt:
+                            self.current_prompt = result.improved_prompt
+                            print(f"[WIZARD] Successfully applied improved prompt")
+                        else:
+                            print(f"[WIZARD] Using best prompt from training metrics")
+                            self.current_prompt = improved_prompt
                     else:
-                        print(f"[WIZARD] Using best prompt from training metrics")
                         self.current_prompt = improved_prompt
-                else:
+                        
+                except Exception as e:
+                    print(f"[WIZARD] Error testing improved prompt: {e}, using training result")
                     self.current_prompt = improved_prompt
-                    
-            except Exception as e:
-                print(f"[WIZARD] Error testing improved prompt: {e}, using training result")
-                self.current_prompt = improved_prompt
+            else:
+                print(f"[WIZARD] Improved prompt too short or empty, keeping current prompt")
         else:
-            print(f"[WIZARD] Improved prompt too short or empty, keeping current prompt")
-    else:
-        print(f"[WIZARD] Training failed, keeping current prompt")
+            print(f"[WIZARD] Training failed, keeping current prompt")
 
-    # Log the improvement
-    improvement_log = {
-        "wizard_id": self.wizard_id,
-        "run_no": self.current_run_no,
-        "conversation_count": self.conversation_count,
-        "old_prompt": self.system_prompt_template,
-        "new_prompt": self.current_prompt,
-        "performance_issues": performance_issues,
-        "metrics": metrics,
-        "dataset_info": {
-            "real_examples": len(judged_logs),
-            "total_examples": len(dataset),
-            "used_synthetic": used_synthetic,
-            "history_buffer_size": len(self.history_buffer),
-            "judged_in_buffer": len(judged_logs)
-        },
-        "timestamp": utils.get_timestamp()
-    }
-    
-    log_path = f"improve_{self.wizard_id}_{utils.get_timestamp().replace(':', '').replace('-', '')}.json"
-    utils.save_conversation_log(improvement_log, log_path)
-    
-    print(f"[WIZARD] Improvement completed!")
-    print(f"[WIZARD] Method: {metrics.get('method', 'Unknown')}")
-    print(f"[WIZARD] Dataset size: {len(dataset)} examples")
-    print(f"[WIZARD] Best score: {metrics.get('best_score', 0):.3f}")
-    print(f"[WIZARD] Improvement log saved: {log_path}")
-    
-    # Update tracking
-    utils.append_improvement_log(
-        self.current_run_no,
-        self.current_prompt,
-        metrics.get("method"),
-        conv_no=self.conversation_count,
-        dataset_size=len(dataset),
-    )
+        # Log the improvement
+        improvement_log = {
+            "wizard_id": self.wizard_id,
+            "run_no": self.current_run_no,
+            "conversation_count": self.conversation_count,
+            "old_prompt": self.system_prompt_template,
+            "new_prompt": self.current_prompt,
+            "performance_issues": performance_issues,
+            "metrics": metrics,
+            "dataset_info": {
+                "real_examples": len(judged_logs),
+                "total_examples": len(dataset),
+                "used_synthetic": used_synthetic,
+                "history_buffer_size": len(self.history_buffer),
+                "judged_in_buffer": len(judged_logs)
+            },
+            "timestamp": utils.get_timestamp()
+        }
+        
+        log_path = f"improve_{self.wizard_id}_{utils.get_timestamp().replace(':', '').replace('-', '')}.json"
+        utils.save_conversation_log(improvement_log, log_path)
+        
+        print(f"[WIZARD] Improvement completed!")
+        print(f"[WIZARD] Method: {metrics.get('method', 'Unknown')}")
+        print(f"[WIZARD] Dataset size: {len(dataset)} examples")
+        print(f"[WIZARD] Best score: {metrics.get('best_score', 0):.3f}")
+        print(f"[WIZARD] Improvement log saved: {log_path}")
+        
+        # Update tracking
+        utils.append_improvement_log(
+            self.current_run_no,
+            self.current_prompt,
+            metrics.get("method"),
+            conv_no=self.conversation_count,
+            dataset_size=len(dataset),
+        )
 
-    self.last_improvement = self.conversation_count
-    self.improved_last_conversation = True
+        self.last_improvement = self.conversation_count
+        self.improved_last_conversation = True
 
-    # IMPORTANT: Don't clear history buffer aggressively
-    # This ensures we accumulate more examples for better optimization
-    print(f"[WIZARD] Keeping full history buffer ({len(self.history_buffer)} conversations) for next improvement")
+        # IMPORTANT: Don't clear history buffer aggressively
+        # This ensures we accumulate more examples for better optimization
+        print(f"[WIZARD] Keeping full history buffer ({len(self.history_buffer)} conversations) for next improvement")
