@@ -23,8 +23,8 @@ WIZARD_DEFAULT_GOAL = (
 # Use the research wizard prompt instead of basic wizard prompt
 WIZARD_PROMPT_TEMPLATE_PATH = "templates/research_wizard_prompt.txt"
 MAX_TURNS = 10  # Reduced for faster testing
-# Trigger improvements after conversations 2 and 3 for testing
-SELF_IMPROVE_AFTER = [2, 3]
+# Trigger improvements after conversations 1 and 2 for immediate testing
+SELF_IMPROVE_AFTER = [1, 2]  # Changed from [2, 3] to trigger sooner
 SELF_IMPROVE_PROMPT_TEMPLATE_PATH = "templates/self_improve_prompt.txt"
 
 # Judge Settings
