@@ -80,6 +80,16 @@ POP_HISTORY_LIMIT = 50
 # Miscellaneous
 DEFAULT_TIMEZONE = "UTC"
 
+# Parallel Judge Settings
+MAX_JUDGE_WORKERS = 3  # Number of parallel judge threads
+JUDGE_TIMEOUT = 60  # Maximum seconds to wait for judgments
+
+# For optimal parallel performance:
+PARALLEL_CONVERSATIONS = True  # Run conversations in parallel too
+START_WHEN_SPAWNED = False  # Complete population generation first
+
+# Self-improvement schedule - clear breakpoints
+SELF_IMPROVE_AFTER = [2, 4, 6]  # Improvement points with time to collect judgments
 
 def _get_last_schedule_point(schedule):
     """Return the last integer from the self-improvement schedule."""
