@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIgentChat Debug Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>AIgentChat Debug Page</h1>
+    
+    <div id="status" class="status info">Checking API status...</div>
+    
+    <h2>API Status</h2>
+    <pre id="api-status">Loading...</pre>
+    
+    <h2>Auth Status</h2>
+    <pre id="auth-status">Loading...</pre>
+    
+    <h2>Directory Check</h2>
+    <pre id="dir-check">Checking if frontend was built...</pre>
+    
+    <h2>Quick Actions</h2>
+    <button onclick="checkAPI()">Check API</button>
+    <button onclick="checkAuth()">Check Auth</button>
+    <button onclick="window.location.href='/api/status'">Raw API Status</button>
+    
+    <script>
+        async function checkAPI() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                document.getElementById('api-status').textContent = JSON.stringify(data, null, 2);
+                document.getElementById('status').className = 'status success';
+                document.getElementById('status').textContent = 'API is working!';
+            } catch (error) {
+                document.getElementById('api-status').textContent = 'Error: ' + error.message;
+                document.getElementById('status').className = 'status error';
+                document.getElementById('status').textContent = 'API connection failed!';
+            }
+        }
+        
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/check_auth');
+                const data = await response.json();
+                document.getElementById('auth-status').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('auth-status').textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        // Run checks on load
+        checkAPI();
+        checkAuth();
+        
+        // Check if this is being served correctly
+        document.getElementById('dir-check').textContent = 
+            'Current URL: ' + window.location.href + '\n' +
+            'This debug page is being served correctly if you can see this.';
+    </script>
+</body>
+</html>
