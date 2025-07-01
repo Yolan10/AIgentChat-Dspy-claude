@@ -22,7 +22,7 @@ MAX_TURNS = 10
 # SELF_IMPROVE_AFTER = 2  # Improve every 2 conversations
 
 # Option 2: After specific conversation numbers (RECOMMENDED for testing)
-SELF_IMPROVE_AFTER = [1, 3, 5]  # Improve after 1st, 3rd, and 5th conversations
+SELF_IMPROVE_AFTER = [1, 10, 35]  # Improve after 1st, 10thrd, and 35th conversations
 
 # Option 3: String format (alternative to list)
 # SELF_IMPROVE_AFTER = "1;3;5"  # Same as above but as string
@@ -87,9 +87,6 @@ JUDGE_TIMEOUT = 60  # Maximum seconds to wait for judgments
 # For optimal parallel performance:
 PARALLEL_CONVERSATIONS = True  # Run conversations in parallel too
 START_WHEN_SPAWNED = False  # Complete population generation first
-
-# Self-improvement schedule - clear breakpoints
-SELF_IMPROVE_AFTER = [2, 4, 6]  # Improvement points with time to collect judgments
 
 def _get_last_schedule_point(schedule):
     """Return the last integer from the self-improvement schedule."""
