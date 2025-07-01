@@ -23,7 +23,7 @@ from flask_login import (
     login_required,
 )
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_socketio import SocketIO
 from flask_cors import CORS
 from tracking_chat_openai import TrackingChatOpenAI as ChatOpenAI
@@ -34,18 +34,10 @@ import utils
 from integrated_system import IntegratedSystem
 from token_tracker import token_tracker
 
-app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
+app = Flask(__name__, static_folder='frontend/dist', static_url_path='')
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", secrets.token_urlsafe(24))
 CORS(app)
-
-# Configure SocketIO for production
-socketio = SocketIO(
-    app, 
-    cors_allowed_origins="*", 
-    async_mode="eventlet",
-    logger=True,
-    engineio_logger=True
-)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -65,13 +57,13 @@ def init_user_db():
         cur = conn.execute("SELECT COUNT(*) FROM users")
         count = cur.fetchone()[0]
         if count == 0:
-            # For production, use admin/admin as default
+            # For Render deployment, use admin/admin credentials as documented
             password_hash = generate_password_hash("admin")
             conn.execute(
                 "INSERT INTO users (username, password_hash) VALUES (?, ?)",
                 ("admin", password_hash),
             )
-            print("Created default admin account - username: 'admin', password: 'admin'")
+            print("Initialized default admin account - username: 'admin', password: 'admin'")
         conn.commit()
 
 
@@ -209,12 +201,17 @@ def run_simulation_with_logging(instruction: str, population_size: int, goal: st
         )
 
         # Generate population using the GodAgent directly
-        population = system.god.spawn_population(
-            instruction,
-            population_size,
-            run_no=run_no,
-            start_index=1,
-        )
+        try:
+            population = system.god.spawn_population(
+                instruction,
+                population_size,
+                run_no=run_no,
+                start_index=1,
+            )
+        except Exception as e:
+            print(f"Error generating population: {str(e)}")
+            ws_logger.log_system_event("simulation_error", {"error": f"Failed to generate population: {str(e)}"})
+            return
 
         for agent in population:
             ws_logger.log_system_event(
@@ -312,6 +309,9 @@ def run_simulation_with_logging(instruction: str, population_size: int, goal: st
         )
 
     except Exception as e:
+        print(f"Simulation error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         ws_logger.log_system_event("simulation_error", {"error": str(e)})
     finally:
         with simulation_state_lock:
@@ -331,24 +331,13 @@ def get_status():
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
-    username = data.get("username", "")
-    password = data.get("password", "")
-    
-    print(f"Login attempt - Username: {username}")
-    
-    user_row = get_user_by_username(username)
-    if user_row:
-        print(f"User found: {user_row['username']}")
-        password_valid = check_password_hash(user_row["password_hash"], password)
-        print(f"Password valid: {password_valid}")
-        
-        if password_valid:
-            user = User(user_row["id"], user_row["username"], user_row["password_hash"])
-            login_user(user)
-            return jsonify({"status": "success"})
-    else:
-        print(f"User not found: {username}")
-    
+    user_row = get_user_by_username(data.get("username", ""))
+    if user_row and check_password_hash(
+        user_row["password_hash"], data.get("password", "")
+    ):
+        user = User(user_row["id"], user_row["username"], user_row["password_hash"])
+        login_user(user)
+        return jsonify({"status": "success"})
     return jsonify({"error": "Invalid credentials"}), 401
 
 
@@ -827,159 +816,44 @@ def search_logs():
     return jsonify(results[offset : offset + limit])
 
 
-# Debug route
-@app.route("/debug")
-def debug_page():
-    """Serve a simple debug page"""
-    import subprocess
-    
-    # Check Node and npm
-    try:
-        node_version = subprocess.check_output(['node', '--version'], text=True).strip()
-    except:
-        node_version = "Not found"
-    
-    try:
-        npm_version = subprocess.check_output(['npm', '--version'], text=True).strip()
-    except:
-        npm_version = "Not found"
-    
-    # List directories
-    root_files = os.listdir('.')
-    frontend_exists = os.path.exists('frontend')
-    frontend_files = os.listdir('frontend') if frontend_exists else []
-    
-    debug_html = '''<!DOCTYPE html>
-<html>
-<head>
-    <title>AIgentChat Debug</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; }
-        .success { color: green; }
-        .error { color: red; }
-        .warning { color: orange; }
-        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    </style>
-</head>
-<body>
-<h1>AIgentChat Debug Info</h1>
-<p class="success">✓ Flask is running correctly!</p>
-
-<h2>Environment Info</h2>
-<table>
-<tr><th>Item</th><th>Value</th></tr>
-<tr><td>Current working directory</td><td>''' + os.getcwd() + '''</td></tr>
-<tr><td>Node version</td><td class="''' + ('success' if node_version != 'Not found' else 'error') + '''">''' + node_version + '''</td></tr>
-<tr><td>NPM version</td><td class="''' + ('success' if npm_version != 'Not found' else 'error') + '''">''' + npm_version + '''</td></tr>
-<tr><td>Python version</td><td>''' + sys.version + '''</td></tr>
-</table>
-
-<h2>Directory Structure</h2>
-<h3>Root Directory Files:</h3>
-<pre>''' + '\\n'.join(root_files) + '''</pre>
-
-<h3>Frontend Directory:</h3>
-<p>Frontend directory exists: <span class="''' + ('success' if frontend_exists else 'error') + '''">''' + str(frontend_exists) + '''</span></p>
-''' + ('<pre>' + '\\n'.join(frontend_files) + '</pre>' if frontend_exists else '') + '''
-
-<h3>Frontend Build Status:</h3>
-<p>Frontend dist exists: <span class="''' + ('success' if os.path.exists('frontend/dist') else 'error') + '''">''' + str(os.path.exists("frontend/dist")) + '''</span></p>
-<p>Frontend dist contents: <pre>''' + str(os.listdir("frontend/dist") if os.path.exists("frontend/dist") else "Directory not found") + '''</pre></p>
-
-<h2>Quick Fix Instructions</h2>
-<div style="background: #ffffcc; padding: 15px; border: 1px solid #cccc00;">
-<p><strong>To fix the frontend build issue on Render:</strong></p>
-<ol>
-<li>Go to your Render dashboard</li>
-<li>Click on your service settings</li>
-<li>Update the Build Command to:<br>
-<code>pip install -r requirements.txt && cd frontend && npm install && npm run build && cd ..</code></li>
-<li>Make sure NODE_VERSION environment variable is set to: 18.17.0</li>
-<li>Redeploy the service</li>
-</ol>
-</div>
-
-<h2>Test Links:</h2>
-<ul>
-<li><a href="/api/status">API Status</a> - ''' + ('✓ Working' if True else '✗ Not working') + '''</li>
-<li><a href="/api/check_auth">Auth Check</a> - ''' + ('✓ Working' if True else '✗ Not working') + '''</li>
-<li><a href="/">Frontend (if built)</a> - ''' + ('✓ Should work after build' if os.path.exists("frontend/dist") else '✗ Not built yet') + '''</li>
-</ul>
-
-<h2>What the Frontend Should Show:</h2>
-<ul>
-<li>Login page with username/password fields</li>
-<li>After login: Dashboard with simulation controls</li>
-<li>Tabs for: Configuration, Prompt Editor, Effectiveness Charts, Token Usage, Conversations, Run History</li>
-<li>Real-time updates during simulations via WebSocket</li>
-</ul>
-
-<p><small>Debug page generated at: ''' + utils.get_timestamp() + '''</small></p>
-</body>
-</html>'''
-    return debug_html
-
-
-@app.route("/api/debug/users")
-def debug_users():
-    """Debug route to check users - REMOVE IN PRODUCTION"""
-    try:
-        with get_db_connection() as conn:
-            cur = conn.execute("SELECT id, username FROM users")
-            users = [{"id": row["id"], "username": row["username"]} for row in cur.fetchall()]
-        
-        db_exists = os.path.exists(config.USER_DB_PATH)
-        
-        return jsonify({
-            "database_exists": db_exists,
-            "database_path": config.USER_DB_PATH,
-            "users": users,
-            "user_count": len(users)
-        })
-    except Exception as e:
-        return jsonify({
-            "error": str(e),
-            "database_exists": os.path.exists(config.USER_DB_PATH),
-            "database_path": config.USER_DB_PATH
-        })
-
-
 # Serve frontend static files
 @app.route("/")
 def serve_frontend():
-    """Serve the main index.html"""
-    frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
-    if os.path.exists(os.path.join(frontend_dir, "index.html")):
-        return send_from_directory(frontend_dir, "index.html")
+    """Serve the main index.html file."""
+    # Check if we're in production (Render) or development
+    if os.path.exists(os.path.join(app.static_folder, "index.html")):
+        return send_from_directory(app.static_folder, "index.html")
     else:
-        return jsonify({"error": "Frontend not built. Run 'cd frontend && npm install && npm run build'"}), 404
+        # Fallback error page when frontend isn't built
+        return """
+        <html>
+        <head><title>AI Agent Monitor</title></head>
+        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h1>Frontend Not Built</h1>
+            <p>The frontend assets are not available. Please build the frontend:</p>
+            <pre style="background-color: #f0f0f0; padding: 20px; display: inline-block; text-align: left;">
+cd frontend
+npm install
+npm run build
+            </pre>
+            <p>Then restart the server.</p>
+        </body>
+        </html>
+        """, 500
 
 @app.route("/<path:path>")
 def serve_static(path):
-    """Serve static files from the React build"""
-    frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
-    
-    # Security check - prevent directory traversal
-    if ".." in path:
-        return "Not Found", 404
-    
-    # Check if it's an API route first
+    """Serve static files."""
+    # First check if it's an API route that shouldn't be here
     if path.startswith("api/"):
-        return "Not Found", 404
+        return jsonify({"error": "Not found"}), 404
+        
+    # Check if file exists in static folder
+    if os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
     
-    # Try to serve the file
-    file_path = os.path.join(frontend_dir, path)
-    if os.path.exists(file_path) and os.path.isfile(file_path):
-        return send_from_directory(frontend_dir, path)
-    
-    # For React Router - return index.html for any non-existent paths
-    index_path = os.path.join(frontend_dir, "index.html")
-    if os.path.exists(index_path):
-        return send_from_directory(frontend_dir, "index.html")
-    
-    return "Not Found", 404
+    # For SPA, return index.html for client-side routing
+    return serve_frontend()
 
 
 # WebSocket events
@@ -1002,18 +876,14 @@ def handle_disconnect():
     ws_logger.log_system_event("client_disconnect", {"sid": request.sid})
 
 
-# Initialize the database when the module is imported
-utils.ensure_logs_dir()
-init_user_db()
-
 if __name__ == "__main__":
+    utils.ensure_logs_dir()
+
+    init_user_db()
     if len(sys.argv) == 4 and sys.argv[1] == "create_user":
         create_user(sys.argv[2], sys.argv[3])
         print("User created")
     else:
-        # Use eventlet for production
-        import eventlet
-        eventlet.monkey_patch()
-        
+        # Use regular run for development, not socketio.run
         port = int(os.environ.get("PORT", 5000))
-        socketio.run(app, debug=False, host="0.0.0.0", port=port)
+        app.run(debug=True, host="0.0.0.0", port=port)
