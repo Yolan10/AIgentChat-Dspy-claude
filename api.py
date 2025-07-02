@@ -34,10 +34,20 @@ import utils
 from integrated_system import IntegratedSystem
 from token_tracker import token_tracker
 
-app = Flask(__name__, static_folder='frontend/dist', static_url_path='')
-app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", secrets.token_urlsafe(24))
-CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
+
+# Configure CORS properly for production
+cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+CORS(app, 
+     origins=cors_origins,
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+
+socketio = SocketIO(app, 
+                   cors_allowed_origins=cors_origins, 
+                   async_mode="threading")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
