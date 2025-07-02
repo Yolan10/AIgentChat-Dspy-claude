@@ -23,7 +23,7 @@ from flask_login import (
     login_required,
 )
 
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_from_directory
 from flask_socketio import SocketIO
 from flask_cors import CORS
 from tracking_chat_openai import TrackingChatOpenAI as ChatOpenAI
@@ -35,7 +35,7 @@ from integrated_system import IntegratedSystem
 from token_tracker import token_tracker
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", os.urandom(24).hex())
 
 # Configure CORS properly for production
 cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
@@ -45,6 +45,7 @@ CORS(app,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
+# Use threading instead of asyncio for better compatibility
 socketio = SocketIO(app, 
                    cors_allowed_origins=cors_origins, 
                    async_mode="threading")
@@ -54,27 +55,45 @@ login_manager.init_app(app)
 
 
 def get_db_connection():
+    """Get database connection with proper settings."""
     conn = sqlite3.connect(config.USER_DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_user_db():
-    with get_db_connection() as conn:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)"
-        )
-        cur = conn.execute("SELECT COUNT(*) FROM users")
-        count = cur.fetchone()[0]
-        if count == 0:
-            # For Render deployment, use admin/admin credentials as documented
-            password_hash = generate_password_hash("admin")
+    """Initialize user database with default admin account."""
+    try:
+        with get_db_connection() as conn:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)"
+            )
+            cur = conn.execute("SELECT COUNT(*) FROM users")
+            count = cur.fetchone()[0]
+            if count == 0:
+                # Use 'admin' as both username and password for initial setup
+                password_hash = generate_password_hash('admin')
+                conn.execute(
+                    "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                    ("admin", password_hash),
+                )
+                print("Created default admin user - username: 'admin', password: 'admin'")
+            conn.commit()
+    except Exception as e:
+        print(f"Error initializing database: {e}")
+        # Create logs directory if it doesn't exist
+        os.makedirs(os.path.dirname(config.USER_DB_PATH), exist_ok=True)
+        # Retry
+        with get_db_connection() as conn:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)"
+            )
+            password_hash = generate_password_hash('admin')
             conn.execute(
                 "INSERT INTO users (username, password_hash) VALUES (?, ?)",
                 ("admin", password_hash),
             )
-            print("Initialized default admin account - username: 'admin', password: 'admin'")
-        conn.commit()
+            conn.commit()
 
 
 class User(UserMixin):
@@ -156,7 +175,7 @@ class WebSocketLogger:
             "agent_id": agent_id,
         }
         self.conversation_buffer.append(turn_data)
-        socketio.emit("conversation_turn", turn_data)
+        socketio.start_background_task(socketio.emit, "conversation_turn", turn_data)
 
     def log_progress(self, completed: int, total: int, run_no: int):
         """Log simulation progress."""
@@ -168,7 +187,7 @@ class WebSocketLogger:
         }
         with simulation_state_lock:
             simulation_state["progress"] = progress_data
-        socketio.emit("progress_update", progress_data)
+        socketio.start_background_task(socketio.emit, "progress_update", progress_data)
 
     def log_system_event(self, event_type: str, data: Dict[str, Any]):
         """Log system events."""
@@ -177,7 +196,7 @@ class WebSocketLogger:
             "timestamp": utils.get_timestamp(),
             "data": data,
         }
-        socketio.emit("system_event", event_data)
+        socketio.start_background_task(socketio.emit, "system_event", event_data)
 
 
 ws_logger = WebSocketLogger()
@@ -211,17 +230,12 @@ def run_simulation_with_logging(instruction: str, population_size: int, goal: st
         )
 
         # Generate population using the GodAgent directly
-        try:
-            population = system.god.spawn_population(
-                instruction,
-                population_size,
-                run_no=run_no,
-                start_index=1,
-            )
-        except Exception as e:
-            print(f"Error generating population: {str(e)}")
-            ws_logger.log_system_event("simulation_error", {"error": f"Failed to generate population: {str(e)}"})
-            return
+        population = system.god.spawn_population(
+            instruction,
+            population_size,
+            run_no=run_no,
+            start_index=1,
+        )
 
         for agent in population:
             ws_logger.log_system_event(
@@ -319,9 +333,6 @@ def run_simulation_with_logging(instruction: str, population_size: int, goal: st
         )
 
     except Exception as e:
-        print(f"Simulation error: {str(e)}")
-        import traceback
-        traceback.print_exc()
         ws_logger.log_system_event("simulation_error", {"error": str(e)})
     finally:
         with simulation_state_lock:
@@ -340,15 +351,26 @@ def get_status():
 
 @app.route("/api/login", methods=["POST"])
 def login():
-    data = request.json
-    user_row = get_user_by_username(data.get("username", ""))
-    if user_row and check_password_hash(
-        user_row["password_hash"], data.get("password", "")
-    ):
-        user = User(user_row["id"], user_row["username"], user_row["password_hash"])
-        login_user(user)
-        return jsonify({"status": "success"})
-    return jsonify({"error": "Invalid credentials"}), 401
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        username = data.get("username", "")
+        password = data.get("password", "")
+        
+        if not username or not password:
+            return jsonify({"error": "Username and password required"}), 400
+            
+        user_row = get_user_by_username(username)
+        if user_row and check_password_hash(user_row["password_hash"], password):
+            user = User(user_row["id"], user_row["username"], user_row["password_hash"])
+            login_user(user)
+            return jsonify({"status": "success"})
+        return jsonify({"error": "Invalid credentials"}), 401
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        return jsonify({"error": "Server error during login"}), 500
 
 
 @app.route("/api/logout", methods=["POST"])
@@ -829,41 +851,12 @@ def search_logs():
 # Serve frontend static files
 @app.route("/")
 def serve_frontend():
-    """Serve the main index.html file."""
-    # Check if we're in production (Render) or development
-    if os.path.exists(os.path.join(app.static_folder, "index.html")):
-        return send_from_directory(app.static_folder, "index.html")
-    else:
-        # Fallback error page when frontend isn't built
-        return """
-        <html>
-        <head><title>AI Agent Monitor</title></head>
-        <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-            <h1>Frontend Not Built</h1>
-            <p>The frontend assets are not available. Please build the frontend:</p>
-            <pre style="background-color: #f0f0f0; padding: 20px; display: inline-block; text-align: left;">
-cd frontend
-npm install
-npm run build
-            </pre>
-            <p>Then restart the server.</p>
-        </body>
-        </html>
-        """, 500
+    return send_from_directory("frontend/dist", "index.html")
+
 
 @app.route("/<path:path>")
 def serve_static(path):
-    """Serve static files."""
-    # First check if it's an API route that shouldn't be here
-    if path.startswith("api/"):
-        return jsonify({"error": "Not found"}), 404
-        
-    # Check if file exists in static folder
-    if os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    
-    # For SPA, return index.html for client-side routing
-    return serve_frontend()
+    return send_from_directory("frontend/dist", path)
 
 
 # WebSocket events
@@ -894,6 +887,7 @@ if __name__ == "__main__":
         create_user(sys.argv[2], sys.argv[3])
         print("User created")
     else:
-        # Use regular run for development, not socketio.run
+        # Use regular Flask run in production instead of socketio.run
+        # This is more compatible with various deployment platforms
         port = int(os.environ.get("PORT", 5000))
-        app.run(debug=True, host="0.0.0.0", port=port)
+        socketio.run(app, debug=False, host="0.0.0.0", port=port)
