@@ -1,48 +1,60 @@
-PERFORMANCE ANALYSIS FOR WIZARD IMPROVEMENT
+PERFORMANCE ANALYSIS REPORT
+===========================
 
-Dataset Overview:
-- Total conversations analyzed: {{total_conversations}}
-- Average scores: Goal={{avg_goal}}, Coherence={{avg_coherence}}, Tone={{avg_tone}}, Overall={{avg_overall}}
+Total Conversations Analyzed: {{total_conversations}}
 
-{{#if_low_goal}}
-GOAL COMPLETION ISSUES (Score: {{avg_goal}}):
-- Wizard struggles to generate comprehensive research plans
-- May be missing key research topics or failing to synthesize information
-- Needs better structure for research plan generation
-{{/if_low_goal}}
-
-{{#if_low_coherence}}
-COHERENCE ISSUES (Score: {{avg_coherence}}):
-- Wizard produces poorly structured or invalid JSON outputs
-- May have problems following the required research plan schema
-- Needs improvement in logical flow and organization
-{{/if_low_coherence}}
-
-{{#if_low_tone}}
-TONE ISSUES (Score: {{avg_tone}}):
-- Wizard needs to be more empathetic and professional
-- May be using clinical or impersonal language
-- Should focus on building rapport and validating experiences
-{{/if_low_tone}}
+OVERALL METRICS:
+- Goal Completion: {{avg_goal}} {{#if_low_goal}}⚠ BELOW TARGET{{/if_low_goal}}
+- Coherence: {{avg_coherence}} {{#if_low_coherence}}⚠ BELOW TARGET{{/if_low_coherence}}
+- Tone: {{avg_tone}} {{#if_low_tone}}⚠ BELOW TARGET{{/if_low_tone}}
+- Overall Score: {{avg_overall}} {{#if_low_overall}}⚠ NEEDS IMPROVEMENT{{/if_low_overall}}
 
 {{#if_low_overall}}
-OVERALL PERFORMANCE ISSUES (Score: {{avg_overall}}):
-- General improvement needed across all evaluation criteria
-- Consider comprehensive prompt restructuring
-- May need better training examples or clearer instructions
-{{/if_low_overall}}
-
-SPECIFIC EXAMPLES FROM LOW-SCORING CONVERSATIONS:
+LOW-SCORING CONVERSATION EXAMPLES:
 {{#each low_scoring_examples}}
 - {{rationale}}
 {{/each}}
+{{/if_low_overall}}
 
-RECOMMENDED IMPROVEMENTS:
+IMPROVEMENT SUGGESTIONS:
 {{#each improvement_suggestions}}
-- {{suggestion}}
+• {{suggestion}}
 {{/each}}
 
-FOCUS AREAS FOR NEXT ITERATION:
+FOCUS AREAS FOR IMPROVEMENT:
 {{#each focus_areas}}
-- {{area}}: {{description}}
+{{area}}: {{description}}
 {{/each}}
+
+{{#if_low_goal}}
+GOAL COMPLETION ISSUES:
+The wizard is struggling to generate comprehensive research plans. Common issues include:
+- Missing key research topics
+- Inadequate time allocation
+- Poor integration of behavioral science frameworks
+- Incomplete JSON structures
+{{/if_low_goal}}
+
+{{#if_low_coherence}}
+COHERENCE ISSUES:
+The wizard's outputs lack proper structure. Common issues include:
+- Invalid JSON formatting
+- Unclear topic organization
+- Missing required schema fields
+- Poor logical flow in research plans
+{{/if_low_coherence}}
+
+{{#if_low_tone}}
+TONE ISSUES:
+The wizard needs to improve communication style. Common issues include:
+- Insufficient empathy with participants
+- Overly clinical or detached language
+- Missing validation of participant experiences
+- Poor rapport building
+{{/if_low_tone}}
+
+RECOMMENDED PROMPT IMPROVEMENTS:
+1. Add clearer instructions for areas scoring below 0.7
+2. Include more examples of successful conversations
+3. Emphasize structured output requirements
+4. Strengthen empathetic communication guidelines
