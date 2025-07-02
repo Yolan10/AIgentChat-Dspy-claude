@@ -7,7 +7,7 @@ client = OpenAI(api_key=openai_key)
 
 try:
     resp = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4.1-nano",
         messages=[{"role": "user", "content": "Hello"}],
     )
     print(resp.choices[0].message.content)
