@@ -44,15 +44,23 @@ render_url = "https://aigentchat-dspy-pf7r.onrender.com"
 if render_url not in cors_origins and cors_origins != ["*"]:
     cors_origins.append(render_url)
 
+# Clean up origins list
+cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
+
 CORS(app, 
      origins=cors_origins,
      supports_credentials=True,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
-# Fix SocketIO CORS configuration
+# Fix SocketIO CORS configuration - ensure it accepts the render URL
+if cors_origins == ["*"]:
+    socketio_origins = "*"
+else:
+    socketio_origins = cors_origins
+
 socketio = SocketIO(app, 
-                   cors_allowed_origins=cors_origins, 
+                   cors_allowed_origins=socketio_origins, 
                    async_mode="threading",
                    logger=False,  # Reduce logging noise
                    engineio_logger=False)
