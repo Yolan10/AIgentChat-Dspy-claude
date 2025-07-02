@@ -1,44 +1,72 @@
-import React, { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Toaster } from 'react-hot-toast'
-import { SupabaseProvider } from './components/SupabaseProvider'
-import { DemoDataProvider } from './components/DemoDataProvider'
-import { useAuth } from './hooks/useSupabase'
-import { ConnectionStatus } from './components/ConnectionStatus'
-import { config } from './lib/config'
+import React, { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
+import { config } from './config';
+import Dashboard from './components/Dashboard';
+import ConfigPanel from './components/ConfigPanel';
+import PromptEditor from './components/PromptEditor';
+import EffectivenessChart from './components/EffectivenessChart';
+import ConversationViewer from './components/ConversationViewer';
+import RunHistory from './components/RunHistory';
+import TokenUsage from './components/TokenUsage';
+import Login from './Login';
+import { Settings, BarChart3, MessageSquare, History, FileText, Activity, Coins } from 'lucide-react';
 
-// Import components
-import Dashboard from './components/Dashboard'
-import ConfigPanel from './components/ConfigPanel'
-import PromptEditor from './components/PromptEditor'
-import EffectivenessChart from './components/EffectivenessChart'
-import ConversationViewer from './components/ConversationViewer'
-import RunHistory from './components/RunHistory'
-import TokenUsage from './components/TokenUsage'
-import Login from './components/Login'
-import { Settings, BarChart3, MessageSquare, History, FileText, Activity, Coins } from 'lucide-react'
+const socket = io(config.WS_URL, {
+  withCredentials: true
+});
 
-// Create a client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      cacheTime: 1000 * 60 * 10, // 10 minutes
-      retry: (failureCount, error) => {
-        // Don't retry in demo mode
-        if (config.app.isDevelopment && !config.supabase.url) {
-          return false
-        }
-        return failureCount < 3
-      },
-    },
-  },
-})
+function App() {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [authenticated, setAuthenticated] = useState(false);
+  const [simulationState, setSimulationState] = useState({
+    running: false,
+    paused: false,
+    current_run: null,
+    progress: { completed: 0, total: 0 }
+  });
+  const [conversationTurns, setConversationTurns] = useState([]);
+  const [systemEvents, setSystemEvents] = useState([]);
 
-function AppContent() {
-  const { user, loading } = useAuth()
-  const [activeTab, setActiveTab] = useState('dashboard')
+  useEffect(() => {
+    fetch(config.API_ENDPOINTS.checkAuth, {
+      credentials: 'include'
+    })
+      .then(res => res.json())
+      .then(data => setAuthenticated(data.authenticated))
+      .catch(() => setAuthenticated(false));
+
+    // Socket event listeners
+    socket.on('status_update', (status) => {
+      setSimulationState(status);
+    });
+
+    socket.on('conversation_turn', (turn) => {
+      setConversationTurns(prev => [...prev.slice(-50), turn]);
+    });
+
+    socket.on('progress_update', (progress) => {
+      setSimulationState(prev => ({ ...prev, progress }));
+    });
+
+    socket.on('system_event', (event) => {
+      setSystemEvents(prev => [...prev.slice(-20), event]);
+    });
+
+    // Fetch initial status
+    fetch(config.API_ENDPOINTS.status, {
+      credentials: 'include'
+    })
+      .then(res => res.json())
+      .then(setSimulationState)
+      .catch(console.error);
+
+    return () => {
+      socket.off('status_update');
+      socket.off('conversation_turn');
+      socket.off('progress_update');
+      socket.off('system_event');
+    };
+  }, []);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: Activity },
@@ -48,55 +76,49 @@ function AppContent() {
     { id: 'tokens', label: 'Token Usage', icon: Coins },
     { id: 'conversations', label: 'Conversations', icon: MessageSquare },
     { id: 'history', label: 'Run History', icon: History }
-  ]
+  ];
 
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />
+        return (
+          <Dashboard
+            simulationState={simulationState}
+            conversationTurns={conversationTurns}
+            systemEvents={systemEvents}
+          />
+        );
       case 'config':
-        return <ConfigPanel />
+        return <ConfigPanel />;
       case 'prompts':
-        return <PromptEditor />
+        return <PromptEditor />;
       case 'effectiveness':
-        return <EffectivenessChart />
+        return <EffectivenessChart />;
       case 'tokens':
-        return <TokenUsage />
+        return <TokenUsage />;
       case 'conversations':
-        return <ConversationViewer />
+        return <ConversationViewer conversationTurns={conversationTurns} />;
       case 'history':
-        return <RunHistory />
+        return <RunHistory />;
       default:
-        return <Dashboard />
+        return <Dashboard simulationState={simulationState} />;
     }
-  }
+  };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
+  const handleLogout = async () => {
+    await fetch(config.API_ENDPOINTS.logout, { 
+      method: 'POST', 
+      credentials: 'include' 
+    });
+    setAuthenticated(false);
+  };
 
-  // In demo mode, skip authentication
-  const isDemoMode = !config.supabase.url || !config.supabase.anonKey
-  if (!isDemoMode && !user) {
-    return <Login />
+  if (!authenticated) {
+    return <Login onLogin={() => setAuthenticated(true)} />;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Environment Banner */}
-      {config.app.isDevelopment && (
-        <div className="bg-amber-500 text-white px-4 py-2 text-center text-sm font-medium">
-          🚧 {isDemoMode ? 'DEMO MODE' : 'DEVELOPMENT MODE'} - {isDemoMode ? 'Supabase not configured' : 'Development environment with Supabase integration'}
-        </div>
-      )}
-
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -106,26 +128,33 @@ function AppContent() {
                 <Activity className="w-5 h-5 text-white" />
               </div>
               <h1 className="text-2xl font-bold text-gray-900">AI Agent Monitor</h1>
-              {isDemoMode && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  Demo
-                </span>
-              )}
             </div>
             
             <div className="flex items-center space-x-4">
-              {!isDemoMode && <ConnectionStatus />}
-              
-              <div className="text-sm text-gray-600">
-                {isDemoMode ? 'Demo User' : user?.email}
+              <div className="flex items-center space-x-2">
+                <span className={`status-indicator ${
+                  simulationState.running 
+                    ? simulationState.paused 
+                      ? 'status-paused' 
+                      : 'status-running'
+                    : 'status-stopped'
+                }`}></span>
+                <span className="text-sm font-medium text-gray-700">
+                  {simulationState.running 
+                    ? simulationState.paused 
+                      ? 'Paused' 
+                      : 'Running'
+                    : 'Stopped'
+                  }
+                </span>
               </div>
               
-              <button 
-                onClick={() => window.location.reload()} 
-                className="btn-secondary text-sm"
-              >
-                Refresh
-              </button>
+              {simulationState.current_run && (
+                <div className="text-sm text-gray-600">
+                  Run #{simulationState.current_run}
+                </div>
+              )}
+              <button onClick={handleLogout} className="btn-secondary text-sm">Logout</button>
             </div>
           </div>
         </div>
@@ -136,7 +165,7 @@ function AppContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8">
             {tabs.map((tab) => {
-              const Icon = tab.icon
+              const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
@@ -150,7 +179,7 @@ function AppContent() {
                   <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
                 </button>
-              )
+              );
             })}
           </div>
         </div>
@@ -160,26 +189,8 @@ function AppContent() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {renderActiveTab()}
       </main>
-
-      <Toaster position="top-right" />
     </div>
-  )
+  );
 }
 
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <SupabaseProvider>
-        <DemoDataProvider>
-          <Router>
-            <Routes>
-              <Route path="/*" element={<AppContent />} />
-            </Routes>
-          </Router>
-        </DemoDataProvider>
-      </SupabaseProvider>
-    </QueryClientProvider>
-  )
-}
-
-export default App
+export default App;
