@@ -63,37 +63,47 @@ def get_db_connection():
 
 def init_user_db():
     """Initialize user database with default admin account."""
+    # Ensure the directory exists first
+    db_dir = os.path.dirname(config.USER_DB_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+        print(f"Created database directory: {db_dir}")
+    
     try:
+        # Create the database file if it doesn't exist
+        if not os.path.exists(config.USER_DB_PATH):
+            print(f"Creating new database at: {config.USER_DB_PATH}")
+            # Touch the file to create it
+            open(config.USER_DB_PATH, 'a').close()
+        
         with get_db_connection() as conn:
+            # Create the users table
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)"
             )
+            conn.commit()
+            
+            # Check if any users exist
             cur = conn.execute("SELECT COUNT(*) FROM users")
             count = cur.fetchone()[0]
+            
             if count == 0:
-                # Use 'admin' as both username and password for initial setup
+                # Create default admin user
                 password_hash = generate_password_hash('admin')
                 conn.execute(
                     "INSERT INTO users (username, password_hash) VALUES (?, ?)",
                     ("admin", password_hash),
                 )
+                conn.commit()
                 print("Created default admin user - username: 'admin', password: 'admin'")
-            conn.commit()
+            else:
+                print(f"Database initialized with {count} existing users")
+                
     except Exception as e:
         print(f"Error initializing database: {e}")
-        # Create logs directory if it doesn't exist
-        os.makedirs(os.path.dirname(config.USER_DB_PATH), exist_ok=True)
-        # Retry
-        with get_db_connection() as conn:
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)"
-            )
-            password_hash = generate_password_hash('admin')
-            conn.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                ("admin", password_hash),
-            )
-            conn.commit()
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 class User(UserMixin):
