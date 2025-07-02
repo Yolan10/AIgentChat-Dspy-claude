@@ -156,6 +156,14 @@ def load_user(user_id):
         return User(row["id"], row["username"], row["password_hash"])
     return None
 
+# Initialize the user database when the module is imported. This ensures
+# the required table and default admin account exist even if the script is
+# run via Gunicorn without executing the ``__main__`` section.
+try:
+    init_user_db()
+except Exception as init_err:
+    print(f"[DB] Failed to initialize user database: {init_err}")
+
 
 # Global state
 simulation_state = {
