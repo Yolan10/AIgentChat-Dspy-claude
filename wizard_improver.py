@@ -6,6 +6,7 @@ import re
 import json
 import random
 import os
+import traceback
 
 import config
 import utils
@@ -46,6 +47,7 @@ if dspy is not None:
             )
 
 
+    # [TemplateBasedSyntheticDataGenerator class remains the same - not shown for brevity]
     class TemplateBasedSyntheticDataGenerator:
         """Generate synthetic conversation examples using configurable templates."""
         
@@ -289,6 +291,7 @@ if dspy is not None:
         return text.strip()
 
 
+    # [analyze_performance_issues and build_dataset functions remain the same - not shown for brevity]
     def analyze_performance_issues(logs: List[Dict[str, Any]], 
                                  template_path: str = "templates/performance_analysis_template.txt") -> str:
         """Analyze conversation logs to identify specific performance issues using template."""
@@ -544,7 +547,7 @@ JUDGE EVALUATION:
     def train_improver(dataset: List[dspy.Example], 
                       current_prompt: str,
                       settings_path: str = "templates/improvement_prompts.json") -> Tuple[WizardImprover, Dict[str, Any]]:
-        """Train a WizardImprover using template-driven configuration."""
+        """Train a WizardImprover using template-driven configuration with better MIPROv2 debugging."""
 
         # Load settings from template
         try:
@@ -562,15 +565,36 @@ JUDGE EVALUATION:
             scoring_weights = {"research_elements_bonus": 0.02, "improvement_indicators_bonus": 0.01, "total_bonus_cap": 0.3}
             optimizer_settings = {}
 
+        # Ensure DSPy is properly configured
         if dspy.settings.lm is None:
             print("[TRAINING] Configuring DSPy LM...")
-            dspy.settings.configure(
-                lm=dspy.LM(
-                    model=config.LLM_MODEL,
-                    temperature=0.3,  # Lower temperature for more consistent improvement
-                    max_tokens=2048,  # More tokens for detailed prompts
+            # Check if the model is valid
+            model_name = config.LLM_MODEL
+            print(f"[TRAINING] Using model: {model_name}")
+            
+            # NOTE: gpt-4.1-nano might not be a real model
+            # Consider using a fallback if it fails
+            try:
+                dspy.settings.configure(
+                    lm=dspy.LM(
+                        model=model_name,
+                        temperature=0.3,  # Lower temperature for more consistent improvement
+                        max_tokens=2048,  # More tokens for detailed prompts
+                    )
                 )
-            )
+                print("[TRAINING] DSPy LM configured successfully")
+            except Exception as e:
+                print(f"[TRAINING] Error configuring DSPy with model {model_name}: {e}")
+                # Try fallback model
+                fallback_model = "gpt-3.5-turbo"
+                print(f"[TRAINING] Trying fallback model: {fallback_model}")
+                dspy.settings.configure(
+                    lm=dspy.LM(
+                        model=fallback_model,
+                        temperature=0.3,
+                        max_tokens=2048,
+                    )
+                )
 
         def metric(example: dspy.Example, pred: dspy.Prediction, trace: object | None = None) -> float:
             """Template-driven scoring function for improved prompts."""
@@ -621,9 +645,31 @@ JUDGE EVALUATION:
             # Get MIPROv2 settings from template
             mipro_settings = optimizer_settings.get("mipro_v2", {})
             
-            # Calculate validation set size and adjust minibatch if needed
-            val_size = max(1, int(len(dataset) * 0.2))  # 20% for validation
-            minibatch_size = min(config.DSPY_MIPRO_MINIBATCH_SIZE, val_size)
+            # CRITICAL FIX: Better minibatch calculation
+            # MIPROv2 needs reasonable minibatch sizes
+            # The validation set calculation was producing tiny values
+            
+            # Calculate a more reasonable minibatch size
+            # Rule: Use at least 2, but no more than dataset size / 2
+            default_minibatch = config.DSPY_MIPRO_MINIBATCH_SIZE
+            max_minibatch = max(2, len(dataset) // 2)
+            minibatch_size = min(default_minibatch, max_minibatch)
+            
+            # Ensure we have enough data for validation
+            if minibatch_size >= len(dataset):
+                minibatch_size = max(1, len(dataset) - 1)
+            
+            print(f"[TRAINING] Calculated minibatch_size: {minibatch_size} (dataset: {len(dataset)})")
+            
+            # Validate dataset before training
+            print(f"[TRAINING] Validating dataset...")
+            for i, ex in enumerate(dataset[:3]):  # Check first 3 examples
+                print(f"  Example {i+1}:")
+                print(f"    - Has current_prompt: {'current_prompt' in ex}")
+                print(f"    - Has conversation_examples: {'conversation_examples' in ex}")
+                print(f"    - Has goal: {'goal' in ex}")
+                print(f"    - Has performance_issues: {'performance_issues' in ex}")
+                print(f"    - Score: {getattr(ex, 'score', 'N/A')}")
             
             optimizer = OptimizePrompts(
                 metric=metric,
@@ -635,7 +681,13 @@ JUDGE EVALUATION:
             method = "MIPROv2"
             
             try:
-                print(f"[TRAINING] Starting MIPROv2 training with minibatch_size={minibatch_size}")
+                print(f"[TRAINING] Starting MIPROv2 training...")
+                print(f"[TRAINING] Parameters:")
+                print(f"  - trainset size: {len(dataset)}")
+                print(f"  - num_trials: {config.DSPY_TRAINING_ITER * 2}")
+                print(f"  - minibatch_size: {minibatch_size}")
+                print(f"  - require_training_set: {mipro_settings.get('require_training_set', True)}")
+                
                 trained = optimizer.compile(
                     improver_module,
                     trainset=dataset,
@@ -644,24 +696,41 @@ JUDGE EVALUATION:
                     require_training_set=mipro_settings.get("require_training_set", True)
                 )
                 
-                print("[TRAINING] MIPROv2 training completed successfully")
+                print("[TRAINING] MIPROv2 training completed successfully!")
                 
             except Exception as e:
-                print(f"[TRAINING] MIPROv2 failed: {e}, falling back to BootstrapFewShot")
+                print(f"[TRAINING] MIPROv2 failed with error: {str(e)}")
+                print(f"[TRAINING] Error type: {type(e).__name__}")
+                print(f"[TRAINING] Full traceback:")
+                traceback.print_exc()
+                
+                print(f"\n[TRAINING] Falling back to BootstrapFewShot...")
                 bootstrap_settings = optimizer_settings.get("bootstrap_few_shot", {})
+                
+                # Use fewer demos for bootstrap
+                max_demos = min(3, len(dataset) - 1)
                 optimizer = BootstrapFewShot(
                     metric=metric, 
-                    max_bootstrapped_demos=bootstrap_settings.get("max_bootstrapped_demos", 5)
+                    max_bootstrapped_demos=max_demos
                 )
                 method = "BootstrapFewShot (MIPROv2 fallback)"
-                trained = optimizer.compile(improver_module, trainset=dataset)
+                
+                try:
+                    trained = optimizer.compile(improver_module, trainset=dataset)
+                    print("[TRAINING] BootstrapFewShot fallback completed successfully")
+                except Exception as e2:
+                    print(f"[TRAINING] BootstrapFewShot also failed: {e2}")
+                    # Return the base module without optimization
+                    trained = improver_module
+                    method = "Unoptimized (all optimizers failed)"
                 
         elif len(dataset) >= config.DSPY_BOOTSTRAP_MINIBATCH_SIZE:
             print(f"[TRAINING] Using BootstrapFewShot optimizer with {len(dataset)} examples")
             bootstrap_settings = optimizer_settings.get("bootstrap_few_shot", {})
+            max_demos = min(bootstrap_settings.get("max_bootstrapped_demos", 3), len(dataset) - 1)
             optimizer = BootstrapFewShot(
                 metric=metric, 
-                max_bootstrapped_demos=bootstrap_settings.get("max_bootstrapped_demos", 3)
+                max_bootstrapped_demos=max_demos
             )
             method = "BootstrapFewShot"
             trained = optimizer.compile(improver_module, trainset=dataset)
