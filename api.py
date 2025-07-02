@@ -39,6 +39,11 @@ app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", os.urandom(24).hex
 
 # Configure CORS properly for production
 cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+# Add specific Render URL if not already included
+render_url = "https://aigentchat-dspy-pf7r.onrender.com"
+if render_url not in cors_origins and cors_origins != ["*"]:
+    cors_origins.append(render_url)
+
 CORS(app, 
      origins=cors_origins,
      supports_credentials=True,
@@ -48,7 +53,9 @@ CORS(app,
 # Use threading instead of asyncio for better compatibility
 socketio = SocketIO(app, 
                    cors_allowed_origins=cors_origins, 
-                   async_mode="threading")
+                   async_mode="threading",
+                   logger=True,
+                   engineio_logger=True)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
