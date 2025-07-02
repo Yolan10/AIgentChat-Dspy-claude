@@ -38,6 +38,24 @@ def startup_checks():
         print(f"   ✗ Failed to create logs directory: {e}")
         sys.exit(1)
     
+    # CRITICAL: Initialize database BEFORE any other checks
+    print("\n[1.5/6] Initializing database FIRST...")
+    try:
+        from api import init_user_db
+        init_user_db()
+        print("   ✓ Database initialized successfully")
+    except Exception as e:
+        print(f"   ✗ Database initialization failed: {e}")
+        # Try to create directory and retry
+        try:
+            db_dir = os.path.dirname(config.USER_DB_PATH)
+            os.makedirs(db_dir, exist_ok=True)
+            init_user_db()
+            print("   ✓ Database initialized on retry")
+        except Exception as e2:
+            print(f"   ✗ Critical: Database cannot be initialized: {e2}")
+            sys.exit(1)
+            
     print("\n[2/6] Checking templates...")
     template_files = [
         config.POPULATION_INSTRUCTION_TEMPLATE_PATH,
