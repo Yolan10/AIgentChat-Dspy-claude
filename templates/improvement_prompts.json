@@ -1,65 +1,98 @@
 {
-  "research_elements_keywords": [
-    "research", "interview", "hearing loss", "COM-B", "theoretical framework",
-    "empathy", "rapport", "follow-up", "JSON", "structured plan", 
-    "qualitative", "methodology", "participant", "insights", "evidence-based"
-  ],
-  
-  "improvement_indicators": [
-    "barrier", "challenge", "improve", "better", "enhance", "specific", 
-    "detailed", "comprehensive", "systematic", "evidence", "validate", "explore"
-  ],
-  
-  "quality_indicators": {
-    "research_planning": [
-      "research_questions", "methodology", "theoretical_framework", 
-      "target_population", "data_collection", "analysis_plan"
-    ],
-    "participant_engagement": [
-      "active_listening", "empathy", "validation", "rapport_building",
-      "follow_up_questions", "clarification", "summarization"
-    ],
-    "conversation_management": [
-      "topic_transitions", "time_management", "goal_orientation",
-      "information_synthesis", "conflict_resolution", "boundary_setting"
+  "description": "Configuration for wizard prompt improvement using DSPy optimizers",
+  "synthetic_data_settings": {
+    "minimum_dataset_size": 8,
+    "max_synthetic_examples": 20,
+    "good_example_ratio": 0.6,
+    "synthetic_scenarios": [
+      "recently diagnosed with mild hearing loss",
+      "has worn hearing aids for several years",
+      "experiencing progressive hearing loss",
+      "struggles with hearing in social situations",
+      "seeking information about hearing aid options"
     ]
   },
-  
+  "research_elements_keywords": [
+    "research plan",
+    "JSON",
+    "hearing loss",
+    "research_questions",
+    "topics",
+    "interview",
+    "qualitative",
+    "COM-B",
+    "TDF",
+    "behavioral science",
+    "systematic",
+    "comprehensive"
+  ],
+  "improvement_indicators": [
+    "structured",
+    "empathetic",
+    "systematic",
+    "comprehensive",
+    "clear",
+    "specific",
+    "actionable",
+    "evidence-based"
+  ],
   "scoring_weights": {
-    "research_elements_bonus": 0.03,
-    "improvement_indicators_bonus": 0.02,
-    "innovation_bonus_max": 0.15,
-    "total_bonus_cap": 0.4
+    "research_elements_bonus": 0.02,
+    "improvement_indicators_bonus": 0.01,
+    "innovation_bonus_max": 0.1,
+    "total_bonus_cap": 0.3
   },
-  
   "optimizer_settings": {
     "mipro_v2": {
-      "num_candidates": 12,
-      "init_temperature": 1.2,
-      "require_training_set": true,
+      "num_candidates": 10,
+      "init_temperature": 1.0,
       "track_stats": true,
-      "verbose": true
+      "require_training_set": true,
+      "minibatch_percentage": 0.3,
+      "min_minibatch_size": 2,
+      "max_optimization_steps": 50,
+      "early_stopping_patience": 5,
+      "candidate_selection_method": "top_k",
+      "candidate_pool_size": 20
     },
     "bootstrap_few_shot": {
-      "max_bootstrapped_demos": 8
+      "max_bootstrapped_demos": 5,
+      "labeled_sample_size": 16,
+      "error_analysis": true
     },
     "copro": {
-      "breadth": 8
+      "breadth": 5,
+      "depth": 3,
+      "init_temperature": 0.7
     }
   },
-  
-  "synthetic_data_settings": {
-    "good_example_ratio": 0.7,
-    "minimum_dataset_size": 3,
-    "max_synthetic_examples": 15,
-    "always_add_synthetic": true,
-    "force_minimum_size": true
-  },
-  
-  "training_settings": {
-    "force_mipro_threshold": 1,
-    "aggressive_optimization": true,
-    "multiple_trials": true,
-    "detailed_logging": true
+  "prompt_improvement_strategies": {
+    "goal_completion_focus": {
+      "when_score_below": 0.7,
+      "improvement_suggestions": [
+        "Add more specific instructions for creating research plans",
+        "Include examples of good research plan structures",
+        "Emphasize the importance of covering all key topics",
+        "Add validation steps for JSON format"
+      ]
+    },
+    "coherence_focus": {
+      "when_score_below": 0.7,
+      "improvement_suggestions": [
+        "Improve logical flow instructions",
+        "Add structure guidelines",
+        "Include JSON schema validation reminders",
+        "Emphasize clear topic organization"
+      ]
+    },
+    "tone_focus": {
+      "when_score_below": 0.7,
+      "improvement_suggestions": [
+        "Add empathy guidelines",
+        "Include active listening techniques",
+        "Emphasize validation and rapport building",
+        "Add examples of supportive language"
+      ]
+    }
   }
 }
