@@ -51,7 +51,7 @@ OPENAI_MAX_RETRIES = 3
 # File/Logging Settings
 LOGS_DIRECTORY = "logs"
 JSON_INDENT = 2
-USER_DB_PATH = "users.db"
+USER_DB_PATH = os.path.join(LOGS_DIRECTORY, "users.db")
 
 # Runtime Options
 SHOW_LIVE_CONVERSATIONS = True  # See conversations in real-time
