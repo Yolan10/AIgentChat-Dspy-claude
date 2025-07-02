@@ -20,7 +20,16 @@ Simple chat simulation using LangChain and Dspy.
    configure `dspy.settings` yourself, the code will initialize a default
    `dspy.LM` using the values in `config.py` and your OpenAI key.
 
-3. The application initializes the user database with a default admin
+3. Verify your API key (optional):
+
+   ```bash
+   python testapi.py
+   ```
+
+   The script sends a tiny request and prints a short reply if the key is valid.
+
+
+4. The application initializes the user database with a default admin
    account when none exists. The credentials are:
 
    ```
@@ -34,7 +43,7 @@ Simple chat simulation using LangChain and Dspy.
    python api.py create_user YOUR_USERNAME YOUR_PASSWORD
    ```
 
-4. Run the simulation from the command line:
+5. Run the simulation from the command line:
 
    ```bash
    python main.py
@@ -44,7 +53,7 @@ Simple chat simulation using LangChain and Dspy.
    objective and `--instruction` for the population generation context. Pass
    `--web` or `--dev` to start the optional dashboard instead of the CLI run.
 
-5. Launch the graphical interface (requires pygame):
+6. Launch the graphical interface (requires pygame):
 
    ```bash
    python pygame_ui.py
