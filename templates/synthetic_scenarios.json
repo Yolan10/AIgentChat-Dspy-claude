@@ -1,77 +1,61 @@
 {
   "hearing_loss_scenarios": [
-    "recently diagnosed with moderate hearing loss",
-    "has worn hearing aids for 10 years",
-    "struggles with hearing in noisy environments",
-    "considering cochlear implant surgery",
-    "family history of hearing loss",
-    "sudden hearing loss from infection",
-    "age-related hearing decline",
-    "workplace noise-induced hearing loss",
+    "recently diagnosed with mild hearing loss",
+    "has moderate hearing loss for 10 years",
+    "experiencing sudden hearing loss",
     "born with congenital hearing loss",
-    "experienced hearing loss after military service",
-    "musician with noise-induced hearing damage",
-    "senior citizen with progressive hearing loss"
+    "progressive hearing loss due to aging",
+    "noise-induced hearing loss from work",
+    "hearing loss following illness",
+    "unilateral hearing loss",
+    "fluctuating hearing loss",
+    "high-frequency hearing loss"
   ],
-  
   "research_topics": [
-    "barriers to hearing aid adoption",
-    "social stigma around hearing loss",
-    "communication strategies",
+    "communication barriers in daily life",
+    "emotional impact of hearing loss",
+    "hearing aid experiences and challenges",
+    "social participation and isolation",
     "workplace accommodations",
-    "family impact and support",
-    "treatment satisfaction",
-    "quality of life factors",
-    "healthcare access challenges",
-    "technology adaptation",
-    "peer support networks",
-    "educational accommodations",
-    "mental health impacts"
+    "family dynamics and relationships",
+    "healthcare access and experiences",
+    "technology adoption and preferences",
+    "coping strategies and adaptations",
+    "quality of life factors"
   ],
-  
   "participant_names": [
-    "Sarah", "John", "Maria", "David", "Emma", "Michael", 
-    "Lisa", "Robert", "Jennifer", "William", "Amanda", "James"
+    "Sarah", "Michael", "Emma", "David", "Linda",
+    "Robert", "Jennifer", "William", "Patricia", "James",
+    "Margaret", "Thomas", "Dorothy", "Charles", "Helen"
   ],
-  
   "conversation_quality_indicators": {
     "good_wizard_behaviors": [
-      "asks specific follow-up questions",
-      "uses empathetic language",
-      "stays focused on research goals",
-      "builds rapport effectively",
-      "generates comprehensive research plan",
-      "validates participant experiences",
-      "explores underlying causes",
-      "maintains professional boundaries"
+      "active listening and validation",
+      "structured interview techniques",
+      "empathetic questioning",
+      "comprehensive topic coverage",
+      "clear research plan generation"
     ],
     "poor_wizard_behaviors": [
-      "asks vague questions",
-      "doesn't follow up on important points",
-      "jumps between topics randomly",
-      "uses clinical/cold language",
-      "fails to generate proper research plan",
-      "dismisses participant concerns",
-      "rushes through topics",
-      "lacks empathy"
+      "rushed questioning",
+      "lack of empathy",
+      "missing key topics",
+      "poor structure",
+      "inadequate research planning"
     ],
     "good_outcomes": [
-      "participant shares detailed experiences",
-      "covers all key research topics",
-      "produces valid JSON research plan",
-      "maintains professional tone",
-      "uncovers actionable insights",
-      "creates trust and rapport",
-      "addresses research objectives fully"
+      "detailed participant responses",
+      "comprehensive research plan",
+      "strong rapport established",
+      "all topics covered systematically",
+      "valid JSON output generated"
     ],
     "poor_outcomes": [
-      "participant gives brief responses",
-      "misses important research areas",
-      "produces incomplete or invalid plan",
-      "conversation feels impersonal",
-      "fails to gather useful data",
-      "participant becomes disengaged",
-      "research objectives not met"
+      "minimal participant engagement",
+      "incomplete research coverage",
+      "missing JSON structure",
+      "key topics overlooked",
+      "participant discomfort"
     ]
   }
 }
