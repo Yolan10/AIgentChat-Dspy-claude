@@ -50,12 +50,12 @@ CORS(app,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
-# Use threading instead of asyncio for better compatibility
+# Fix SocketIO CORS configuration
 socketio = SocketIO(app, 
                    cors_allowed_origins=cors_origins, 
                    async_mode="threading",
-                   logger=True,
-                   engineio_logger=True)
+                   logger=False,  # Reduce logging noise
+                   engineio_logger=False)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -63,6 +63,9 @@ login_manager.init_app(app)
 
 def get_db_connection():
     """Get database connection with proper settings."""
+    # Ensure logs directory exists first
+    utils.ensure_logs_dir()
+    
     conn = sqlite3.connect(config.USER_DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -70,25 +73,27 @@ def get_db_connection():
 
 def init_user_db():
     """Initialize user database with default admin account."""
+    print(f"[DB] Initializing database at: {config.USER_DB_PATH}")
+    
     # Ensure the directory exists first
     db_dir = os.path.dirname(config.USER_DB_PATH)
     if db_dir and not os.path.exists(db_dir):
         os.makedirs(db_dir, exist_ok=True)
-        print(f"Created database directory: {db_dir}")
+        print(f"[DB] Created database directory: {db_dir}")
     
     try:
-        # Create the database file if it doesn't exist
-        if not os.path.exists(config.USER_DB_PATH):
-            print(f"Creating new database at: {config.USER_DB_PATH}")
-            # Touch the file to create it
-            open(config.USER_DB_PATH, 'a').close()
-        
+        # Always try to create/connect to database
         with get_db_connection() as conn:
-            # Create the users table
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)"
-            )
+            # Create the users table if it doesn't exist
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                    username TEXT UNIQUE NOT NULL, 
+                    password_hash TEXT NOT NULL
+                )
+            """)
             conn.commit()
+            print("[DB] Users table created/verified")
             
             # Check if any users exist
             cur = conn.execute("SELECT COUNT(*) FROM users")
@@ -102,12 +107,12 @@ def init_user_db():
                     ("admin", password_hash),
                 )
                 conn.commit()
-                print("Created default admin user - username: 'admin', password: 'admin'")
+                print("[DB] Created default admin user - username: 'admin', password: 'admin'")
             else:
-                print(f"Database initialized with {count} existing users")
+                print(f"[DB] Database initialized with {count} existing users")
                 
     except Exception as e:
-        print(f"Error initializing database: {e}")
+        print(f"[DB] Error initializing database: {e}")
         import traceback
         traceback.print_exc()
         raise
@@ -350,6 +355,9 @@ def run_simulation_with_logging(instruction: str, population_size: int, goal: st
         )
 
     except Exception as e:
+        print(f"[ERROR] Simulation failed: {e}")
+        import traceback
+        traceback.print_exc()
         ws_logger.log_system_event("simulation_error", {"error": str(e)})
     finally:
         with simulation_state_lock:
@@ -387,6 +395,8 @@ def login():
         return jsonify({"error": "Invalid credentials"}), 401
     except Exception as e:
         print(f"Login error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": "Server error during login"}), 500
 
 
@@ -897,9 +907,16 @@ def handle_disconnect():
 
 
 if __name__ == "__main__":
+    print("[STARTUP] Starting API server...")
+    
+    # Ensure logs directory exists
     utils.ensure_logs_dir()
-
+    print(f"[STARTUP] Logs directory: {config.LOGS_DIRECTORY}")
+    
+    # Initialize database
+    print("[STARTUP] Initializing database...")
     init_user_db()
+    
     if len(sys.argv) == 4 and sys.argv[1] == "create_user":
         create_user(sys.argv[2], sys.argv[3])
         print("User created")
@@ -907,4 +924,5 @@ if __name__ == "__main__":
         # Use regular Flask run in production instead of socketio.run
         # This is more compatible with various deployment platforms
         port = int(os.environ.get("PORT", 5000))
+        print(f"[STARTUP] Starting server on port {port}")
         socketio.run(app, debug=False, host="0.0.0.0", port=port)
