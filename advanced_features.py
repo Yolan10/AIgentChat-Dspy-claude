@@ -60,7 +60,7 @@ class PopulationGenerator:
             # Create messages with clearer instructions
             messages = [
                 SystemMessage(content=prompt),
-                HumanMessage(content="Please provide exactly the JSON array with all persona objects. Each persona must include: name, personality, age, occupation, initial_goals, and memory_summary fields."),
+                HumanMessage(content="Describe each persona using the fields: name, personality, age, occupation, initial_goals, and memory_summary."),
             ]
             print(f"[DEBUG] Created {len(messages)} messages")
             
@@ -72,7 +72,11 @@ class PopulationGenerator:
             
             # Parse JSON with multiple strategies
             personas = self._parse_json_response(response)
-            
+
+            if not personas:
+                print("[DEBUG] JSON parsing failed, trying text parsing")
+                personas = self._parse_text_response(response)
+
             if not personas:
                 print(f"[DEBUG] All parsing strategies failed, using fallback")
                 return self._fallback_personas(n)
@@ -173,6 +177,30 @@ class PopulationGenerator:
         
         print(f"[DEBUG] All parsing strategies failed")
         return []
+
+    def _parse_text_response(self, response: str) -> List[Dict[str, Any]]:
+        """Parse persona specs from a free-form text response."""
+        required = ["name", "personality", "age", "occupation", "initial_goals", "memory_summary"]
+        blocks = re.split(r"\n\s*\n", response.strip())
+        personas: List[Dict[str, Any]] = []
+        for block in blocks:
+            spec: Dict[str, Any] = {}
+            for line in block.splitlines():
+                if ":" not in line:
+                    continue
+                key, value = [part.strip() for part in line.split(":", 1)]
+                key_lc = key.lower()
+                if key_lc in required:
+                    spec[key_lc] = value
+            if all(field in spec for field in required):
+                try:
+                    spec["age"] = int(re.findall(r"\d+", spec["age"])[0])
+                except Exception:
+                    pass
+                personas.append(spec)
+        if personas:
+            print(f"[DEBUG] Parsed {len(personas)} personas from text")
+        return personas
 
     def _is_valid_persona(self, spec: Dict[str, Any]) -> bool:
         """Check if a persona specification has all required fields."""
