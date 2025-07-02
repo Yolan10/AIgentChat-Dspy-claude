@@ -31,10 +31,15 @@ cd ..
 echo "Installing Python dependencies..."
 pip install -r requirements.txt
 
-echo "Creating logs directory..."
+echo -e "\nCreating logs directory..."
 mkdir -p logs
 
-echo "Creating templates directory if it doesn't exist..."
+echo "Setting up database..."
+# Create an empty database file
+touch logs/users.db
+echo "Database file created at logs/users.db"
+
+echo -e "\nCreating templates directory if it doesn't exist..."
 mkdir -p templates
 
 # Create default templates if they don't exist
