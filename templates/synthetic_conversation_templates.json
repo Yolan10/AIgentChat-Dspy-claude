@@ -2,95 +2,126 @@
   "conversation_templates": {
     "good_conversation": {
       "opening": {
-        "participant": "Hi, I'm {name}. I've been dealing with {scenario} and I'm interested in your research.",
-        "wizard": "Thank you for participating, {name}. I'd like to understand your experience better. Can you tell me more about how {scenario_context} has affected your daily communication?"
+        "participant": "Hello, I'm {name} and I'm interested in participating in your hearing loss research study.",
+        "wizard": "Thank you so much for joining us today, {name}. I really appreciate you taking the time to share your experiences. Before we begin, I want you to know that there are no right or wrong answers - I'm simply interested in understanding your personal journey with {scenario_context}. Could you start by telling me a bit about when you first noticed changes in your hearing?"
       },
       "middle_exchanges": [
         {
-          "participant": "Well, it's been challenging especially in {situation_type}. I often feel {emotional_impact}.",
-          "wizard": "That sounds really difficult. When you mention {situation_type}, what specific environments or types of conversations are most challenging for you? This will help us understand {research_topic} better."
+          "participant": "It's been really challenging in {situation_type}. I often feel {emotional_impact} because {specific_challenge_description}.",
+          "wizard": "I can understand how that would be {emotional_impact}. {validation_statement} When you're in {situation_type}, are there any specific strategies you've developed to help manage these challenges? {follow_up_question}"
         },
         {
-          "participant": "{specific_challenge_description}",
-          "wizard": "Those are really important insights. {validation_statement} Can you help me understand {follow_up_question}?"
+          "participant": "I've tried using hearing aids, but there are still difficulties with background noise and group conversations.",
+          "wizard": "That's a common experience many people share. The challenge with background noise can be particularly frustrating. Could you tell me more about specific situations where this impacts you most? For example, work meetings, family gatherings, or social events?"
         }
       ],
       "closing": {
-        "wizard": "Based on our conversation, I'm developing a research plan that focuses on {identified_themes}. Here's what I'm proposing: {research_plan_json}",
-        "participant": "That sounds comprehensive and really captures what I've been experiencing."
+        "wizard": "Thank you for sharing such valuable insights. Based on our conversation, I've identified several key themes including {identified_themes}. I'll now create a comprehensive research plan to address these areas:\n\n{research_plan_json}",
+        "participant": "This looks really thorough. I'm glad to see you're addressing all these different aspects of living with hearing loss."
       }
     },
     "poor_conversation": {
       "opening": {
-        "participant": "Hi, I'm {name}. I have {scenario}.",
-        "wizard": "OK. Tell me about hearing loss."
+        "participant": "Hi, I have {scenario}.",
+        "wizard": "Okay. Tell me about your hearing loss."
       },
       "middle_exchanges": [
         {
-          "participant": "{brief_response}",
+          "participant": "It's hard sometimes.",
           "wizard": "What else?"
         },
         {
           "participant": "I don't know what else to say.",
-          "wizard": "Anything more?"
+          "wizard": "Do you use hearing aids?"
         }
       ],
       "closing": {
-        "wizard": "Here's a research plan: {inadequate_plan}",
-        "participant": "Um, okay."
+        "wizard": "Here's a basic plan: {inadequate_plan}",
+        "participant": "Is that all?"
       }
     }
   },
-  
   "response_patterns": {
     "situation_types": [
-      "social situations", "work meetings", "family gatherings", "restaurants", 
-      "group conversations", "phone calls", "public spaces", "medical appointments"
+      "noisy restaurants",
+      "work meetings",
+      "family gatherings",
+      "phone conversations",
+      "watching television",
+      "social events",
+      "one-on-one conversations",
+      "outdoor activities"
     ],
     "emotional_impacts": [
-      "left out of conversations", "frustrated and isolated", "embarrassed to ask for repetition",
-      "anxious in group settings", "disconnected from others", "self-conscious about my hearing"
+      "frustrated",
+      "isolated",
+      "anxious",
+      "embarrassed",
+      "exhausted",
+      "overwhelmed",
+      "disconnected",
+      "misunderstood"
     ],
     "specific_challenges": [
-      "Restaurants are the worst - all the background noise. And group conversations where people talk over each other.",
-      "Phone calls are really difficult, especially when there's static or the connection is poor.",
-      "At work, I miss important details in meetings and feel like I'm always catching up.",
-      "Family dinners are frustrating because everyone talks at once and I can't follow the conversation."
+      "I miss important parts of conversations",
+      "people think I'm not paying attention",
+      "I have to ask people to repeat themselves constantly",
+      "I avoid social situations because it's too difficult",
+      "I feel left out of group conversations",
+      "technology doesn't always work as expected",
+      "I'm exhausted from concentrating so hard to hear"
     ],
     "validation_statements": [
-      "I can see how that would be really challenging.",
-      "Thank you for sharing that - it helps me understand the real impact.",
-      "That's a common experience, and it's important that we capture this in our research.",
-      "Your perspective is really valuable for understanding these barriers."
+      "That sounds really challenging",
+      "I appreciate you sharing that with me",
+      "Many people experience similar feelings",
+      "Your feelings are completely valid",
+      "That must be difficult to manage"
     ],
     "follow_up_questions": [
-      "what strategies you've tried to manage these situations?",
-      "how this has affected your relationships?",
-      "what kind of support would be most helpful?",
-      "what barriers you've encountered in seeking help?"
+      "Can you give me a specific example?",
+      "How does that impact your daily routine?",
+      "What would make the biggest difference for you?",
+      "Have you found anything that helps?",
+      "How do others typically respond?"
     ],
     "brief_responses": [
-      "It's hard sometimes.", "I don't know.", "Maybe.", "Sure.", "I guess."
+      "I don't know.",
+      "Not really.",
+      "Sometimes.",
+      "I guess so.",
+      "Maybe."
     ]
   },
-  
   "research_plan_templates": {
     "comprehensive_plan": {
-      "research_questions": [
-        "How do environmental factors affect communication for people with hearing loss?",
-        "What are the primary barriers to social participation?",
-        "What support systems are most effective?"
-      ],
-      "priority_topics": [
-        "environmental_barriers", "social_participation", "support_systems", "communication_strategies"
-      ],
-      "methodology": "qualitative_interviews",
-      "target_population": "adults_with_hearing_loss",
-      "timeline": "6_months"
+      "research_plan": {
+        "participant_id": "synthetic_example",
+        "topics": [
+          {
+            "id": "topic_1",
+            "title": "Communication Challenges",
+            "time_allocation": 30,
+            "priority": "high",
+            "subtopics": ["daily_barriers", "technology_use", "social_impacts"],
+            "frameworks": ["COM-B", "TDF"]
+          },
+          {
+            "id": "topic_2",
+            "title": "Healthcare Journey",
+            "time_allocation": 25,
+            "priority": "high",
+            "subtopics": ["diagnosis", "treatment", "provider_relationships"],
+            "frameworks": ["COM-B"]
+          }
+        ],
+        "total_time": 90,
+        "methodology": "semi-structured interview"
+      }
     },
     "inadequate_plan": {
-      "topics": ["hearing loss"],
-      "questions": ["How is hearing loss?"]
+      "topics": ["hearing loss", "hearing aids"],
+      "time": "some time"
     }
   }
 }
