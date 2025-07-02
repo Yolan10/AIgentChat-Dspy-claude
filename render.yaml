@@ -20,4 +20,6 @@ services:
         generateValue: true
       - key: PORT
         value: 10000
+      - key: CORS_ORIGINS
+        value: https://aigentchat-dspy-pf7r.onrender.com
     autoDeploy: false
