@@ -14,67 +14,75 @@ from logging_system import StructuredLogger
 
 logger = StructuredLogger()
 
+
 def running_interactively() -> bool:
+    """Return True if this script has an interactive TTY available."""
     try:
         return sys.stdin is not None and sys.stdin.isatty()
     except Exception:
         return False
 
-    if __name__ == "__main__":
-        # Test 1: Check DSPy installation
-        print("=" * 60)
-        print("TEST 1: DSPy Installation Check")
-        print("=" * 60)
+
+def main() -> None:
+    """Run a series of sanity checks for DSPy and MIPROv2."""
+    print("Starting MIPROv2 debug script", flush=True)
+    print(f"Python version: {sys.version.split()[0]}", flush=True)
+
+    # Test 1: Check DSPy installation
+    print("=" * 60, flush=True)
+    print("TEST 1: DSPy Installation Check", flush=True)
+    print("=" * 60, flush=True)
         
-        try:
-            import dspy
-            print("✓ DSPy imported successfully")
-            print(f"  Version info: {dspy.__file__}")
+    try:
+        import dspy
+        print("✓ DSPy imported successfully")
+        print(f"  Version info: {dspy.__file__}")
             
-            from dspy.teleprompt.mipro_optimizer_v2 import MIPROv2
-            print("✓ MIPROv2 imported successfully")
-        except Exception as e:
-            print(f"✗ DSPy import failed: {e}")
-            sys.exit(1)
+        from dspy.teleprompt.mipro_optimizer_v2 import MIPROv2
+        print("✓ MIPROv2 imported successfully")
+    except Exception as e:
+        print(f"✗ DSPy import failed: {e}")
+        sys.exit(1)
         
-        # Test 2: Check model configuration
-        print("\n" + "=" * 60)
-        print("TEST 2: Model Configuration")
-        print("=" * 60)
+    # Test 2: Check model configuration
+    print("\n" + "=" * 60)
+    print("TEST 2: Model Configuration")
+    print("=" * 60)
         
-        print(f"Configured model: {config.LLM_MODEL}")
-        print(f"API Key present: {bool(os.environ.get('OPENAI_API_KEY'))}")
+    print(f"Configured model: {config.LLM_MODEL}")
+    print(f"API Key present: {bool(os.environ.get('OPENAI_API_KEY'))}")
         
-        # Test 3: Simple MIPROv2 example
-        print("\n" + "=" * 60)
-        print("TEST 3: Simple MIPROv2 Example")
-        print("=" * 60)
+    # Test 3: Simple MIPROv2 Example
+    print("\n" + "=" * 60)
+    print("TEST 3: Simple MIPROv2 Example")
+    print("=" * 60)
         
-        # Configure DSPy
+    # Configure DSPy
+    try:
+        dspy.settings.configure(
+            lm=dspy.LM(
+                model=config.LLM_MODEL,
+                temperature=0.3,
+                max_tokens=512,
+            )
+        )
+        print("✓ DSPy configured successfully")
+    except Exception as e:
+        print(f"✗ DSPy configuration failed: {e}")
+        print("  Trying fallback model...")
         try:
             dspy.settings.configure(
                 lm=dspy.LM(
-                    model=config.LLM_MODEL,
+                    model="gpt-3.5-turbo",
                     temperature=0.3,
                     max_tokens=512,
                 )
             )
-            print("✓ DSPy configured successfully")
-        except Exception as e:
-            print(f"✗ DSPy configuration failed: {e}")
-            print("  Trying fallback model...")
-            try:
-                dspy.settings.configure(
-                    lm=dspy.LM(
-                        model="gpt-4.1-nano",
-                        temperature=0.3,
-                        max_tokens=512,
-                    )
-                )
-                print("✓ DSPy configured with fallback model")
-            except Exception as e2:
-                print(f"✗ Fallback also failed: {e2}")
-                sys.exit(1)
+            print("✓ DSPy configured with fallback model")
+        except Exception as e2:
+            print(f"✗ Fallback also failed: {e2}")
+            sys.exit(1)
+
         
         # Create a simple signature and module
         class SimpleSignature(dspy.Signature):
@@ -184,6 +192,7 @@ def running_interactively() -> bool:
             if "model" in error_str:
                 print("⚠ Possible model issue")
                 print(f"  - Current model: {config.LLM_MODEL}")
+
                 print("  - Try using 'gpt-4.1-nano' instead")
             
             if "minibatch" in error_str or "batch" in error_str:
@@ -225,3 +234,4 @@ def running_interactively() -> bool:
         print("\n" + "=" * 60)
         print("TEST COMPLETE")
         print("=" * 60)
+
