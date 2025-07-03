@@ -7,9 +7,12 @@ import json
 import random
 import os
 import traceback
+from logging_system import StructuredLogger
 
 import config
 import utils
+
+logger = StructuredLogger()
 
 try:
     import dspy
@@ -650,10 +653,11 @@ JUDGE EVALUATION:
             # The validation set calculation was producing tiny values
             
             # Calculate a more reasonable minibatch size
-            # Rule: Use at least 2, but no more than dataset size / 2
-            default_minibatch = config.DSPY_MIPRO_MINIBATCH_SIZE
+            percentage = mipro_settings.get("minibatch_percentage", 0.5)
+            min_size = mipro_settings.get("min_minibatch_size", 2)
+            estimated = max(min_size, int(len(dataset) * percentage))
             max_minibatch = max(2, len(dataset) // 2)
-            minibatch_size = min(default_minibatch, max_minibatch)
+            minibatch_size = min(estimated, max_minibatch)
             
             # Ensure we have enough data for validation
             if minibatch_size >= len(dataset):
@@ -687,14 +691,14 @@ JUDGE EVALUATION:
                 print(f"  - trainset size: {len(dataset)}")
                 print(f"  - num_trials: {config.DSPY_TRAINING_ITER * 2}")
                 print(f"  - minibatch_size: {minibatch_size}")
-                print(f"  - require_training_set: {mipro_settings.get('require_training_set', True)}")
+                print(f"  - requires_permission_to_run: {mipro_settings.get('requires_permission_to_run', True)}")
                 
                 trained = optimizer.compile(
                     improver_module,
                     trainset=dataset,
                     num_trials=config.DSPY_TRAINING_ITER * 2,  # More trials for MIPROv2
                     minibatch_size=minibatch_size,
-                    require_training_set=mipro_settings.get("require_training_set", True)
+                    requires_permission_to_run=mipro_settings.get("requires_permission_to_run", True)
                 )
                 
                 print("[TRAINING] MIPROv2 training completed successfully!")
@@ -704,6 +708,12 @@ JUDGE EVALUATION:
                 print(f"[TRAINING] Error type: {type(e).__name__}")
                 print(f"[TRAINING] Full traceback:")
                 traceback.print_exc()
+                logger.log_event(
+                    "mipro_error",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    traceback=traceback.format_exc(),
+                )
                 
                 print(f"\n[TRAINING] Falling back to BootstrapFewShot...")
                 bootstrap_settings = optimizer_settings.get("bootstrap_few_shot", {})

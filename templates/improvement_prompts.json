@@ -47,7 +47,7 @@
       "num_candidates": 10,
       "init_temperature": 1.0,
       "track_stats": true,
-      "require_training_set": true,
+      "requires_permission_to_run": true,
       "minibatch_percentage": 0.3,
       "min_minibatch_size": 2,
       "max_optimization_steps": 50,

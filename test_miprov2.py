@@ -10,6 +10,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
 import utils
+from logging_system import StructuredLogger
+
+logger = StructuredLogger()
 
 # Test 1: Check DSPy installation
 print("=" * 60)
@@ -122,6 +125,7 @@ try:
         metric=simple_metric,
         num_candidates=5,
         init_temperature=1.0,
+        auto=None,
         verbose=True,
         track_stats=True
     )
@@ -134,7 +138,7 @@ try:
         trainset=dataset,
         num_trials=4,
         minibatch_size=2,
-        require_training_set=True
+        requires_permission_to_run=True
     )
     
     print("\n✓ MIPROv2 optimization completed!")
@@ -150,6 +154,13 @@ except Exception as e:
     import traceback
     print("\nFull traceback:")
     traceback.print_exc()
+
+    logger.log_event(
+        "miprov2_test_error",
+        error=str(e),
+        error_type=type(e).__name__,
+        traceback=traceback.format_exc(),
+    )
     
     # Try to diagnose common issues
     print("\n" + "=" * 60)
