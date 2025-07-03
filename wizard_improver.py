@@ -179,7 +179,8 @@ if dspy is not None:
                             situation_type=situation,
                             research_topic=topic,
                             validation_statement=validation,
-                            follow_up_question=follow_up
+                            follow_up_question=follow_up,
+                            emotional_impact=impact
                         )
                     else:
                         participant_text = exchange.get("participant", random.choice(response_patterns["brief_responses"]))

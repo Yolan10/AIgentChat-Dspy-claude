@@ -1,13 +1,28 @@
 """DSPy integration for improving judge prompts based on evaluation performance."""
 from __future__ import annotations
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import json
 import numpy as np
 from dataclasses import dataclass
 
 import config
 import utils
+
+
+def _extract_score_value(score_data: Any) -> float:
+    """Return a numeric score from various possible formats."""
+    if isinstance(score_data, (int, float)):
+        return float(score_data)
+    if isinstance(score_data, dict):
+        if 'score' in score_data:
+            return float(score_data['score'])
+        for key in ('value', 'rating', 'overall'):
+            if key in score_data:
+                return float(score_data[key])
+    elif hasattr(score_data, 'score'):
+        return float(score_data.score)
+    return 0.0
 
 try:
     import dspy
@@ -98,6 +113,7 @@ class JudgeCalibrator:
         with open(self.history_path, 'w', encoding='utf-8') as f:
             json.dump(self.calibration_data, f, indent=2)
     
+
     def record_evaluation(
         self,
         conversation_log: Dict[str, Any],
@@ -105,17 +121,20 @@ class JudgeCalibrator:
         human_score: Optional[float] = None
     ) -> None:
         """Record a judge evaluation for calibration."""
+
         entry = {
             "timestamp": utils.get_timestamp(),
             "conversation_id": conversation_log.get("pop_agent_id"),
             "transcript_length": len(conversation_log.get("turns", [])),
             "judge_scores": {
+
                 "goal_completion": self._extract_score_value(judge_result.get("goal_completion", 0)),
                 "coherence": self._extract_score_value(judge_result.get("coherence", 0)),
                 "tone": self._extract_score_value(judge_result.get("tone", 0)),
                 "overall": self._extract_score_value(judge_result.get("overall", judge_result.get("score", 0)))
             },
             "confidence": self._extract_score_value(judge_result.get("confidence", 0.5)),
+
             "human_score": human_score
         }
         
@@ -131,7 +150,9 @@ class JudgeCalibrator:
         length_buckets: Dict[int, List[float]] = {}
         for entry in self.calibration_data:
             bucket = entry["transcript_length"] // 5
+
             score = self._extract_score_value(entry["judge_scores"].get("overall", 0))
+
             length_buckets.setdefault(bucket, []).append(score)
         
         variances = []
@@ -143,15 +164,19 @@ class JudgeCalibrator:
         consistency_score = max(0.0, min(1.0, consistency_score))
         
         # Discrimination: range of scores used
+
         all_scores = [self._extract_score_value(e["judge_scores"].get("overall", 0)) for e in self.calibration_data]
+
         score_range = max(all_scores) - min(all_scores) if all_scores else 0
         discrimination_score = min(1.0, score_range / 0.7)  # Expect at least 0.7 range
         
         # Calibration: correlation with human scores if available
         human_scored = [
             (
+
                 self._extract_score_value(e["judge_scores"].get("overall", 0)),
                 e["human_score"]
+
             )
             for e in self.calibration_data
             if e.get("human_score") is not None
@@ -165,7 +190,10 @@ class JudgeCalibrator:
             calibration_score = 0.5  # Default when no human scores
         
         # Detail: average confidence scores (proxy for rationale quality)
-        confidences = [e.get("confidence", 0.5) for e in self.calibration_data]
+        confidences = [
+            _extract_score_value(e.get("confidence", 0.5))
+            for e in self.calibration_data
+        ]
         detail_score = np.mean(confidences)
         
         return JudgePerformanceMetrics(
