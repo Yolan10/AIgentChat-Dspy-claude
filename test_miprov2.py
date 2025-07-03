@@ -82,6 +82,7 @@ def main() -> None:
         except Exception as e2:
             print(f"✗ Fallback also failed: {e2}")
             sys.exit(1)
+
         
         # Create a simple signature and module
         class SimpleSignature(dspy.Signature):
@@ -191,7 +192,8 @@ def main() -> None:
             if "model" in error_str:
                 print("⚠ Possible model issue")
                 print(f"  - Current model: {config.LLM_MODEL}")
-                print("  - Try using 'gpt-3.5-turbo' instead")
+
+                print("  - Try using 'gpt-4.1-nano' instead")
             
             if "minibatch" in error_str or "batch" in error_str:
                 print("⚠ Possible batch size issue")
@@ -232,8 +234,4 @@ def main() -> None:
         print("\n" + "=" * 60)
         print("TEST COMPLETE")
         print("=" * 60)
-
-
-if __name__ == "__main__":
-    main()
 
