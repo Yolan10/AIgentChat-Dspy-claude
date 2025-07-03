@@ -66,7 +66,7 @@ def running_interactively() -> bool:
             try:
                 dspy.settings.configure(
                     lm=dspy.LM(
-                        model="gpt-3.5-turbo",
+                        model="gpt-4.1-nano",
                         temperature=0.3,
                         max_tokens=512,
                     )
@@ -184,7 +184,7 @@ def running_interactively() -> bool:
             if "model" in error_str:
                 print("⚠ Possible model issue")
                 print(f"  - Current model: {config.LLM_MODEL}")
-                print("  - Try using 'gpt-3.5-turbo' instead")
+                print("  - Try using 'gpt-4.1-nano' instead")
             
             if "minibatch" in error_str or "batch" in error_str:
                 print("⚠ Possible batch size issue")

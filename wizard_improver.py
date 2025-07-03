@@ -598,7 +598,7 @@ JUDGE EVALUATION:
             except Exception as e:
                 print(f"[TRAINING] Error configuring DSPy with model {model_name}: {e}")
                 # Try fallback model
-                fallback_model = "gpt-3.5-turbo"
+                fallback_model = "gpt-4.1-nano"
                 print(f"[TRAINING] Trying fallback model: {fallback_model}")
                 dspy.settings.configure(
                     lm=dspy.LM(
