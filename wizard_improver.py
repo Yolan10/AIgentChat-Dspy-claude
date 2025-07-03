@@ -14,6 +14,14 @@ import utils
 
 logger = StructuredLogger()
 
+def _running_interactively() -> bool:
+    """Return True if the process has an interactive stdin/tty."""
+    try:
+        import sys
+        return sys.stdin is not None and sys.stdin.isatty()
+    except Exception:
+        return False
+
 try:
     import dspy
     from dspy.teleprompt.mipro_optimizer_v2 import MIPROv2 as OptimizePrompts
@@ -544,6 +552,7 @@ JUDGE EVALUATION:
         
         print(f"[DATASET] Final dataset size: {len(dataset)} examples ({len(real_examples)} real, {len(dataset) - len(real_examples)} synthetic)")
         
+        logger.log_event("dataset_built", real=len(real_examples), synthetic=len(dataset)-len(real_examples))
         return dataset, needs_synthetic
 
 
@@ -686,22 +695,29 @@ JUDGE EVALUATION:
             method = "MIPROv2"
             
             try:
+                requires_perm = mipro_settings.get("requires_permission_to_run", True)
+                if requires_perm and not _running_interactively():
+                    print("[TRAINING] Non-interactive environment detected, disabling permission prompt")
+                    requires_perm = False
+
                 print(f"[TRAINING] Starting MIPROv2 training...")
+                logger.log_event("mipro_start", dataset_size=len(dataset), minibatch=minibatch_size, requires_permission=requires_perm)
                 print(f"[TRAINING] Parameters:")
                 print(f"  - trainset size: {len(dataset)}")
                 print(f"  - num_trials: {config.DSPY_TRAINING_ITER * 2}")
                 print(f"  - minibatch_size: {minibatch_size}")
-                print(f"  - requires_permission_to_run: {mipro_settings.get('requires_permission_to_run', True)}")
-                
+                print(f"  - requires_permission_to_run: {requires_perm}")
+
                 trained = optimizer.compile(
                     improver_module,
                     trainset=dataset,
                     num_trials=config.DSPY_TRAINING_ITER * 2,  # More trials for MIPROv2
                     minibatch_size=minibatch_size,
-                    requires_permission_to_run=mipro_settings.get("requires_permission_to_run", True)
+                    requires_permission_to_run=requires_perm,
                 )
                 
                 print("[TRAINING] MIPROv2 training completed successfully!")
+                logger.log_event("mipro_complete", dataset_size=len(dataset))
                 
             except Exception as e:
                 print(f"[TRAINING] MIPROv2 failed with error: {str(e)}")
