@@ -228,10 +228,29 @@ class IntegratedSystem:
         
         # Allow queue processing to catch up
         time.sleep(0.5)
-        
+
         # Clear pending judgments
         with self.judgment_lock:
             self.pending_judgments.clear()
+
+    def _wait_for_judge_results(self, expected_count: int, timeout: int = None) -> None:
+        """Wait until the specified number of judge results have been processed."""
+        if timeout is None:
+            timeout = getattr(config, 'JUDGE_TIMEOUT', 60)
+
+        start = time.time()
+        while time.time() - start < timeout:
+            with self.judgment_lock:
+                processed = len(self.completed_judgments)
+            judged = sum(1 for log in self.wizard.history_buffer if 'judge_result' in log)
+            if processed >= expected_count and judged >= expected_count:
+                break
+            time.sleep(0.1)
+        else:
+            print(
+                f"[SYSTEM] ⚠ Timed out waiting for {expected_count} judged conversations "
+                f"({processed} processed, {judged} in buffer)"
+            )
 
     def _extract_score_value(self, score_data: Any) -> float:
         """Extract a numeric score from various possible formats."""
@@ -390,6 +409,7 @@ class IntegratedSystem:
                     
                     # Wait for all pending judgments
                     self._wait_for_pending_judgments()
+                    self._wait_for_judge_results(batch_end)
                     
                     # Check if wizard should improve
                     print(f"\n[SYSTEM] Checking if wizard should improve...")
@@ -423,6 +443,7 @@ class IntegratedSystem:
         # Wait for any remaining judgments
         print(f"\n[SYSTEM] Waiting for final judgments to complete...")
         self._wait_for_pending_judgments()
+        self._wait_for_judge_results(self.wizard.conversation_count)
         
         # Give a bit more time for queue processing
         time.sleep(1)
