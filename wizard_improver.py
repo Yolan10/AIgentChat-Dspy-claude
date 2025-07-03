@@ -675,6 +675,7 @@ JUDGE EVALUATION:
                 metric=metric,
                 num_candidates=mipro_settings.get("num_candidates", 8),
                 init_temperature=mipro_settings.get("init_temperature", 1.0),
+                auto=None,
                 verbose=True,
                 track_stats=mipro_settings.get("track_stats", True)
             )
